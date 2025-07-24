@@ -92,253 +92,173 @@ def render_event_details(event: TraceEvent):
             st.code(details_json, language="json")
 
 
-def merge_paired_events(events: List[TraceEvent]) -> List[Dict]:
-    """Merge paired events (request/respond, call/respond, start/end) into single units."""
-    # Create a mapping of events by ID
-    events_by_id = {e.id: e for e in events}
-    
-    # Track which events have been processed
-    processed = set()
-    merged_events = []
-    
-    for event in events:
-        if event.id in processed:
-            continue
-            
-        # Look for paired events
-        paired_event = None
-        pair_type = None
-        
-        if event.action in [ActionType.REQUEST, ActionType.CALL, ActionType.START]:
-            # Find corresponding respond/end event
-            for potential_pair in events:
-                if (potential_pair.parent_id == event.id and 
-                    ((event.action == ActionType.REQUEST and potential_pair.action == ActionType.RESPOND) or
-                     (event.action == ActionType.CALL and potential_pair.action == ActionType.RESPOND) or
-                     (event.action == ActionType.START and potential_pair.action == ActionType.END))):
-                    paired_event = potential_pair
-                    pair_type = f"{event.action.value}/{potential_pair.action.value}"
-                    break
-        
-        if paired_event:
-            # Create merged event data
-            merged_events.append({
-                "type": "merged",
-                "primary_event": event,
-                "secondary_event": paired_event,
-                "pair_type": pair_type,
-                "level": None  # Will be set later
-            })
-            processed.add(event.id)
-            processed.add(paired_event.id)
-        else:
-            # Single event
-            merged_events.append({
-                "type": "single",
-                "primary_event": event,
-                "secondary_event": None,
-                "pair_type": None,
-                "level": None
-            })
-            processed.add(event.id)
-    
-    return merged_events
-
-
 def render_hierarchical_view(
     events: List[TraceEvent], tree: Dict[Optional[int], List[TraceEvent]]
 ):
     """Render hierarchical tree view of events."""
     st.markdown("### 🌳 Hierarchical View")
-    
-    # Merge paired events
-    merged_events = merge_paired_events(events)
-    
-    # Rebuild tree structure with merged events
-    merged_tree = {}
-    for merged_item in merged_events:
-        primary_event = merged_item["primary_event"]
-        parent_id = primary_event.parent_id
-        
-        if parent_id not in merged_tree:
-            merged_tree[parent_id] = []
-        merged_tree[parent_id].append(merged_item)
 
-    def render_merged_node(merged_item: Dict, level: int = 0):
-        """Recursively render a merged node and its children."""
+    def render_node(event: TraceEvent, level: int = 0):
+        """Recursively render a node and its children."""
         indent = "　" * level  # Japanese space for better alignment
-        
-        primary_event = merged_item["primary_event"]
-        secondary_event = merged_item["secondary_event"]
-        is_merged = merged_item["type"] == "merged"
-        
-        # Extract information from both events for merged display
-        if is_merged:
-            # Get input from primary event (request/call/start)
-            input_message = primary_event.details.get("message", "")
-            input_prompt = primary_event.details.get("prompt", "")
-            input_args = primary_event.details.get("args", {})
-            
-            if not input_prompt and isinstance(input_args, dict):
-                input_prompt = input_args.get("prompt", "")
-            if not input_message and isinstance(input_args, dict):
-                input_message = input_args.get("message", "") or input_args.get("user_query", "")
-            
-            # Get output from secondary event (respond/end)
-            output_response = secondary_event.details.get("response", "")
-            output_result = secondary_event.details.get("result", "")
-            output_error = secondary_event.details.get("error", "")
-            
-            # Build title for merged event
-            event_icon = get_event_icon(primary_event.type)
-            pair_type = merged_item["pair_type"]
-            
-            title_parts = [f"{indent}{event_icon} {primary_event.type.value} - {pair_type}"]
-            
-            # Add input info
-            if input_message:
-                short_input = input_message[:40] + "..." if len(input_message) > 40 else input_message
-                title_parts.append(f"📝 {short_input}")
-            elif input_prompt:
-                short_input = input_prompt[:40] + "..." if len(input_prompt) > 40 else input_prompt
-                title_parts.append(f"💭 {short_input}")
-            elif primary_event.type == TraceType.TOOL and isinstance(input_args, dict):
-                tool_info = []
-                for key, value in input_args.items():
-                    if key not in ['kwargs', 'args'] and value:
-                        str_val = str(value)[:20] + "..." if len(str(value)) > 20 else str(value)
-                        tool_info.append(f"{key}:{str_val}")
-                if tool_info:
-                    title_parts.append(f"🔧 {tool_info[0]}")
-            
-            # Add output info
-            if output_error:
-                short_error = output_error[:30] + "..." if len(output_error) > 30 else output_error
-                title_parts.append(f"❌ {short_error}")
-            elif output_response:
-                short_output = output_response[:40] + "..." if len(output_response) > 40 else output_response
-                title_parts.append(f"💬 {short_output}")
-            elif output_result and str(output_result) != "":
-                short_output = str(output_result)[:40] + "..." if len(str(output_result)) > 40 else str(output_result)
-                title_parts.append(f"✅ {short_output}")
-            
-            # Add timing info
-            start_time = format_timestamp(primary_event.timestamp)
-            end_time = format_timestamp(secondary_event.timestamp)
-            duration = (secondary_event.timestamp - primary_event.timestamp).total_seconds()
-            title_parts.append(f"⏱️ {duration:.3f}s ({start_time}-{end_time})")
-            
+
+        # Always show message, response, result if available
+        message = event.details.get("message", "")
+        response = event.details.get("response", "")
+        result = event.details.get("result", "")
+        prompt = event.details.get("prompt", "")
+        error = event.details.get("error", "")
+        # Create expandable section for each node
+        # Prepare input text
+        input_text = ""
+        if message:
+            input_text = message[:100] + ("..." if len(message) > 100 else "")
+        elif prompt:
+            input_text = prompt[:100] + ("..." if len(prompt) > 100 else "")
         else:
-            # Single event - use original logic
-            event = primary_event
-            message = event.details.get("message", "")
-            response = event.details.get("response", "")
-            result = event.details.get("result", "")
-            prompt = event.details.get("prompt", "")
-            error = event.details.get("error", "")
-            
+            # Check in args for prompt/message (for LLM calls)
             args = event.details.get("args", {})
-            if not prompt and isinstance(args, dict):
-                prompt = args.get("prompt", "")
-            if not message and isinstance(args, dict):
-                message = args.get("message", "") or args.get("user_query", "")
-            
-            title_parts = [f"{indent}{get_event_icon(event.type)} {event.type.value} - {event.action.value}"]
-            
-            if message:
-                short_message = message[:40] + "..." if len(message) > 40 else message
-                title_parts.append(f"📝 {short_message}")
-            elif prompt:
-                short_prompt = prompt[:40] + "..." if len(prompt) > 40 else prompt
-                title_parts.append(f"💭 {short_prompt}")
-            elif event.type == TraceType.TOOL and isinstance(args, dict):
-                tool_info = []
-                for key, value in args.items():
-                    if key not in ['kwargs', 'args'] and value:
-                        str_val = str(value)[:20] + "..." if len(str(value)) > 20 else str(value)
-                        tool_info.append(f"{key}:{str_val}")
-                if tool_info:
-                    title_parts.append(f"🔧 {tool_info[0]}")
-            
-            if error:
-                short_error = error[:30] + "..." if len(error) > 30 else error
-                title_parts.append(f"❌ {short_error}")
-            elif response:
-                short_response = response[:40] + "..." if len(response) > 40 else response
-                title_parts.append(f"💬 {short_response}")
-            elif result and str(result) != "":
-                short_result = str(result)[:40] + "..." if len(str(result)) > 40 else str(result)
-                title_parts.append(f"✅ {short_result}")
-            elif event.action == ActionType.PROCESS:
-                strategy = event.details.get("strategy", "")
-                if strategy:
-                    title_parts.append(f"📋 {strategy}")
-            
-            title_parts.append(f"({format_timestamp(event.timestamp)})")
+            if isinstance(args, dict):
+                arg_message = args.get("message", "") or args.get("user_query", "") or args.get("prompt", "")
+                if arg_message:
+                    input_text = arg_message[:100] + ("..." if len(arg_message) > 100 else "")
         
-        # Create expandable section
-        title = " | ".join(title_parts)
-        with st.expander(title, expanded=level < 2):
-            if is_merged:
-                # Show merged event details
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"**🚀 開始: {primary_event.action.value}**")
-                    st.markdown(f"**ID:** `{primary_event.id}`")
-                    st.markdown(f"**時刻:** {format_timestamp(primary_event.timestamp)}")
-                    if primary_event.parent_id:
-                        st.markdown(f"**親ID:** `{primary_event.parent_id}`")
-                    
-                    if primary_event.details:
-                        st.markdown("**入力詳細:**")
-                        input_details = json.dumps(primary_event.details, indent=2, ensure_ascii=False)
-                        st.code(input_details, language="json")
-                
-                with col2:
-                    st.markdown(f"**🏁 終了: {secondary_event.action.value}**")
-                    st.markdown(f"**ID:** `{secondary_event.id}`")
-                    st.markdown(f"**時刻:** {format_timestamp(secondary_event.timestamp)}")
-                    duration = (secondary_event.timestamp - primary_event.timestamp).total_seconds()
-                    st.markdown(f"**処理時間:** `{duration:.3f}秒`")
-                    
-                    if secondary_event.details:
-                        st.markdown("**出力詳細:**")
-                        output_details = json.dumps(secondary_event.details, indent=2, ensure_ascii=False)
-                        st.code(output_details, language="json")
-            else:
-                # Show single event details (original logic)
-                event = primary_event
-                col1, col2, col3 = st.columns([2, 2, 3])
-                
-                with col1:
-                    st.markdown(f"**ID:** `{event.id}`")
-                    if event.parent_id:
-                        st.markdown(f"**Parent:** `{event.parent_id}`")
-                
-                with col2:
-                    label = event.details.get("label", "")
-                    if label:
-                        st.markdown(f"**Label:** {label}")
-                    name = event.details.get("name", "")
-                    if name:
-                        st.markdown(f"**Name:** {name}")
-                
-                with col3:
-                    if event.details:
-                        details_json = json.dumps(event.details, indent=2)
-                        st.code(details_json, language="json")
-            
+        # Prepare output text
+        output_text = ""
+        if response:
+            output_text = response[:100] + ("..." if len(response) > 100 else "")
+        elif result and result != "":
+            output_text = str(result)[:100] + ("..." if len(str(result)) > 100 else "")
+        
+        # Build label with input and output
+        label_parts = [
+            f"{indent}{get_event_icon(event.type)} {event.type.value} - {event.action.value}"
+        ]
+        
+        if input_text:
+            label_parts.append(f"📝 {input_text}")
+        
+        if output_text:
+            label_parts.append(f"output: 📝 {output_text}")
+        
+        label_parts.append(f"({format_timestamp(event.timestamp)})")
+        
+        with st.expander(
+            " | ".join(label_parts),
+            expanded=level < 2,  # Expand first two levels by default
+        ):
+            # Show event details
+            col1, col2, col3 = st.columns([2, 2, 3])
+
+            with col1:
+                st.markdown(f"**ID:** `{event.id}`")
+                if event.parent_id:
+                    st.markdown(f"**Parent:** `{event.parent_id}`")
+
+            with col2:
+                label = event.details.get("label", "")
+                if label:
+                    st.markdown(f"**Label:** {label}")
+
+                name = event.details.get("name", "")
+                if name:
+                    st.markdown(f"**Name:** {name}")
+
+            with col3:
+                # Also check in args for prompt/message (for LLM calls)
+                args = event.details.get("args", {})
+                if not prompt and isinstance(args, dict):
+                    prompt = args.get("prompt", "")
+                if not message and isinstance(args, dict):
+                    message = args.get("message", "")
+                    # Also check for user_query in args (for planning steps)
+                    if not message:
+                        message = args.get("user_query", "")
+
+                # Show input message/prompt
+                if message:
+                    display_message = (
+                        message[:100] + "..." if len(message) > 100 else message
+                    )
+                    st.markdown(f"**入力:** {display_message}")
+                elif prompt:
+                    display_prompt = (
+                        prompt[:100] + "..." if len(prompt) > 100 else prompt
+                    )
+                    st.markdown(f"**プロンプト:** {display_prompt}")
+                elif event.type == TraceType.TOOL and isinstance(args, dict):
+                    # For tools, show the main argument values
+                    tool_args = []
+                    for key, value in args.items():
+                        if key not in ["kwargs", "args"] and value:
+                            str_val = (
+                                str(value)[:30] + "..."
+                                if len(str(value)) > 30
+                                else str(value)
+                            )
+                            tool_args.append(f"{key}: {str_val}")
+                    if tool_args:
+                        st.markdown(f"**引数:** {', '.join(tool_args[:2])}")
+
+                # Show output response/result
+                if response:
+                    display_response = (
+                        response[:100] + "..." if len(response) > 100 else response
+                    )
+                    st.markdown(f"**出力:** {display_response}")
+                elif result and result != "":
+                    display_result = (
+                        str(result)[:100] + "..."
+                        if len(str(result)) > 100
+                        else str(result)
+                    )
+                    st.markdown(f"**結果:** {display_result}")
+                elif event.action == ActionType.PROCESS:
+                    # For process actions, show the label or strategy if no response
+                    strategy = event.details.get("strategy", "")
+                    if strategy:
+                        st.markdown(f"**戦略:** {strategy}")
+
+                # Show error if present
+                if error:
+                    display_error = error[:100] + "..." if len(error) > 100 else error
+                    st.markdown(f"**エラー:** :red[{display_error}]")
+
+                # Show other important details if space allows
+                exclude_keys = {
+                    "label",
+                    "name",
+                    "function",
+                    "args",
+                    "kwargs",
+                    "message",
+                    "response",
+                    "result",
+                    "prompt",
+                    "error",
+                }
+                other_details = {
+                    k: v
+                    for k, v in event.details.items()
+                    if k not in exclude_keys and not k.startswith("_")
+                }
+
+                if other_details:
+                    # Show up to 2 additional details
+                    for key, value in list(other_details.items())[:2]:
+                        if isinstance(value, str) and len(value) > 50:
+                            value = value[:50] + "..."
+                        st.markdown(f"**{key}:** {value}")
+
             # Render children
-            event_id = primary_event.id
-            if event_id in merged_tree:
-                for child_item in merged_tree[event_id]:
-                    render_merged_node(child_item, level + 1)
-    
+            if event.id in tree:
+                for child in tree[event.id]:
+                    render_node(child, level + 1)
+
     # Render root nodes
-    root_merged_items = merged_tree.get(None, [])
-    for merged_item in root_merged_items:
-        render_merged_node(merged_item)
+    root_events = tree[None]
+    for event in root_events:
+        render_node(event)
 
 
 def render_timeline_view(events: List[TraceEvent]):
