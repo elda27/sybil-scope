@@ -95,165 +95,292 @@ def render_event_details(event: TraceEvent):
 def render_hierarchical_view(
     events: List[TraceEvent], tree: Dict[Optional[int], List[TraceEvent]]
 ):
-    """Render hierarchical tree view of events."""
+    """Render hierarchical tree view of events according to ARCHITECTURE.md specifications."""
     st.markdown("### 🌳 Hierarchical View")
 
-    def render_node(event: TraceEvent, level: int = 0):
-        """Recursively render a node and its children."""
-        indent = "　" * level  # Japanese space for better alignment
+    def find_paired_events(events_list: List[TraceEvent]) -> Dict[int, TraceEvent]:
+        """Find request/respond and call/respond pairs for LLM and Tool events."""
+        pairs = {}
+        for event in events_list:
+            # LLM request/respond pairs
+            if event.action == ActionType.REQUEST and event.type == TraceType.LLM:
+                for potential_respond in events_list:
+                    if (potential_respond.action == ActionType.RESPOND and 
+                        potential_respond.type == TraceType.LLM and
+                        potential_respond.parent_id == event.id):
+                        pairs[event.id] = potential_respond
+                        break
+            # Tool call/respond pairs
+            elif event.action == ActionType.CALL and event.type == TraceType.TOOL:
+                for potential_respond in events_list:
+                    if (potential_respond.action == ActionType.RESPOND and 
+                        potential_respond.type == TraceType.TOOL and
+                        potential_respond.parent_id == event.id):
+                        pairs[event.id] = potential_respond
+                        break
+        return pairs
 
-        # Always show message, response, result if available
-        message = event.details.get("message", "")
-        response = event.details.get("response", "")
-        result = event.details.get("result", "")
-        prompt = event.details.get("prompt", "")
-        error = event.details.get("error", "")
-        # Create expandable section for each node
-        # Prepare input text
-        input_text = ""
-        if message:
-            input_text = message[:100] + ("..." if len(message) > 100 else "")
-        elif prompt:
-            input_text = prompt[:100] + ("..." if len(prompt) > 100 else "")
+    def calculate_duration(start_event: TraceEvent, end_event: TraceEvent = None) -> str:
+        """Calculate duration between two events."""
+        if end_event:
+            duration = (end_event.timestamp - start_event.timestamp).total_seconds()
+            return f"{duration:.3f}s"
         else:
-            # Check in args for prompt/message (for LLM calls)
-            args = event.details.get("args", {})
-            if isinstance(args, dict):
-                arg_message = args.get("message", "") or args.get("user_query", "") or args.get("prompt", "")
-                if arg_message:
-                    input_text = arg_message[:100] + ("..." if len(arg_message) > 100 else "")
-        
-        # Prepare output text
-        output_text = ""
-        if response:
-            output_text = response[:100] + ("..." if len(response) > 100 else "")
-        elif result and result != "":
-            output_text = str(result)[:100] + ("..." if len(str(result)) > 100 else "")
-        
-        # Build label with input and output
-        label_parts = [
-            f"{indent}{get_event_icon(event.type)} {event.type.value} - {event.action.value}"
-        ]
-        
-        if input_text:
-            label_parts.append(f"📝 {input_text}")
-        
-        if output_text:
-            label_parts.append(f"output: 📝 {output_text}")
-        
-        label_parts.append(f"({format_timestamp(event.timestamp)})")
-        
-        with st.expander(
-            " | ".join(label_parts),
-            expanded=level < 2,  # Expand first two levels by default
-        ):
-            # Show event details
-            col1, col2, col3 = st.columns([2, 2, 3])
+            # For agent events, try to find corresponding end event
+            if start_event.type == TraceType.AGENT and start_event.action == ActionType.START:
+                # Find agent end with same parent
+                for potential_end in events:
+                    if (potential_end.type == TraceType.AGENT and 
+                        potential_end.action == ActionType.END and
+                        potential_end.parent_id == start_event.parent_id and
+                        potential_end.id != start_event.id):
+                        duration = (potential_end.timestamp - start_event.timestamp).total_seconds()
+                        return f"{duration:.3f}s"
+            # If no end event, calculate from children
+            children = tree.get(start_event.id, [])
+            if children:
+                latest_child = max(children, key=lambda x: x.timestamp)
+                duration = (latest_child.timestamp - start_event.timestamp).total_seconds()
+                return f"{duration:.3f}s"
+            return "0.000s"
 
-            with col1:
+    def format_args_for_display(args: dict, max_length: int = 50) -> str:
+        """Format arguments dict for display in expander label."""
+        if not args:
+            return ""
+        arg_parts = []
+        for key, value in args.items():
+            if key not in ["kwargs", "args", "_type"] and value:
+                if isinstance(value, list):
+                    if len(value) > 0 and isinstance(value[0], str):
+                        # For lists, show first element
+                        str_val = str(value[0])[:max_length] + ("..." if len(str(value[0])) > max_length else "")
+                    else:
+                        str_val = str(value)[:max_length] + ("..." if len(str(value)) > max_length else "")
+                else:
+                    str_val = str(value)[:max_length] + ("..." if len(str(value)) > max_length else "")
+                arg_parts.append(f"{key}: {str_val}")
+        return ", ".join(arg_parts[:2])  # Show only first 2 args
+
+    def format_result_for_display(result: any, error: str = None) -> str:
+        """Format result or error for display in expander label."""
+        if error:
+            return f"❌error: {error[:50]}..." if len(error) > 50 else f"❌error: {error}"
+        
+        if isinstance(result, dict):
+            # For dict results, show key-value pairs
+            result_parts = []
+            for key, value in result.items():
+                str_val = str(value)[:30] + ("..." if len(str(value)) > 30 else "")
+                result_parts.append(f"{key}: {str_val}")
+            return ", ".join(result_parts[:2])
+        elif isinstance(result, list):
+            # For list results, show count and first item
+            if len(result) > 0:
+                return f"[{len(result)} items] {str(result[0])[:50]}..."
+            return "[empty]"
+        else:
+            return str(result)[:100] + ("..." if len(str(result)) > 100 else "")
+
+    def render_node(event: TraceEvent, level: int = 0, skip_ids: set = None):
+        """Recursively render a node and its children."""
+        if skip_ids is None:
+            skip_ids = set()
+            
+        if event.id in skip_ids:
+            return
+            
+        indent = "　" * level  # Japanese space for better alignment
+        
+        # Check if this event has a pair (request/respond or call/respond)
+        pairs = find_paired_events(events)
+        paired_event = pairs.get(event.id)
+        
+        if paired_event:
+            # This is a paired event - render as single expander
+            skip_ids.add(paired_event.id)
+            
+            # Build label based on event type
+            if event.type == TraceType.LLM:
+                # Extract prompt from request
+                prompt_text = ""
+                args = event.details.get("args", {})
+                if isinstance(args, dict):
+                    prompts = args.get("prompts", [])
+                    if prompts and isinstance(prompts, list) and len(prompts) > 0:
+                        prompt_text = prompts[0][:100] + ("..." if len(prompts[0]) > 100 else "")
+                    else:
+                        prompt_text = args.get("prompt", "")[:100] + ("..." if len(args.get("prompt", "")) > 100 else "")
+                
+                # Extract response
+                response_text = paired_event.details.get("response", "")[:100]
+                if len(paired_event.details.get("response", "")) > 100:
+                    response_text += "..."
+                
+                duration = calculate_duration(event, paired_event)
+                
+                label = f"{indent}{get_event_icon(event.type)} {event.type.value}"
+                if prompt_text:
+                    label += f" | 📝prompt: \"{prompt_text}\""
+                if response_text:
+                    label += f" | 📝respond: {response_text}"
+                label += f" | ({duration})"
+                
+            elif event.type == TraceType.TOOL:
+                # Tool call/respond pair
+                tool_name = event.details.get("name", "")
+                args_text = format_args_for_display(event.details.get("args", {}))
+                
+                # Check for error or result in respond
+                error = paired_event.details.get("error", "")
+                result = paired_event.details.get("result", "")
+                result_text = format_result_for_display(result, error)
+                
+                duration = calculate_duration(event, paired_event)
+                
+                label = f"{indent}{get_event_icon(event.type)} {event.type.value}"
+                if tool_name:
+                    label += f" | name: {tool_name}"
+                if args_text:
+                    label += f" | 📝args: {args_text}"
+                if result_text:
+                    label += f" | {'📝result' if not error else ''}: {result_text}"
+                label += f" | ({duration})"
+            
+            # Create expander for paired event
+            with st.expander(label, expanded=level < 2):
+                col1, col2 = st.columns([1, 1])
+                
+                with col1:
+                    if event.type == TraceType.LLM:
+                        st.markdown(f"**Request ID:** `{event.id}`")
+                        st.markdown(f"**Respond ID:** `{paired_event.id}`")
+                    else:  # Tool
+                        st.markdown(f"**Call ID:** `{event.id}`")
+                        st.markdown(f"**Respond ID:** `{paired_event.id}`")
+                    
+                    if event.parent_id:
+                        st.markdown(f"**Parent:** `{event.parent_id}`")
+                    
+                    # Model info for LLM
+                    if event.type == TraceType.LLM:
+                        model = event.details.get("model", "")
+                        if model:
+                            st.markdown(f"**model:** {model}")
+                    
+                    # Tool name
+                    if event.type == TraceType.TOOL:
+                        tool_name = event.details.get("name", "")
+                        if tool_name:
+                            st.markdown(f"**Tool name:** {tool_name}")
+                
+                with col2:
+                    # Show full details
+                    if event.type == TraceType.LLM:
+                        args = event.details.get("args", {})
+                        if args:
+                            st.markdown("**Args:**")
+                            # Show important LLM parameters
+                            for key in ["temperature", "max_tokens", "model_name"]:
+                                if key in args:
+                                    st.text(f"  {key}: {args[key]}")
+                        
+                        st.markdown("**Response:**")
+                        st.text(paired_event.details.get("response", "")[:500])
+                        
+                        # Show token usage if available
+                        llm_output = paired_event.details.get("llm_output", {})
+                        if llm_output:
+                            st.markdown("**LLM Output:**")
+                            st.json(llm_output)
+                    
+                    elif event.type == TraceType.TOOL:
+                        # Show args
+                        args = event.details.get("args", {})
+                        if args:
+                            st.markdown("**Args:**")
+                            st.json(args)
+                        
+                        # Show result or error
+                        error = paired_event.details.get("error", "")
+                        if error:
+                            st.markdown("**Error:**")
+                            st.error(error)
+                            error_type = paired_event.details.get("error_type", "")
+                            if error_type:
+                                st.text(f"Error Type: {error_type}")
+                        else:
+                            result = paired_event.details.get("result", "")
+                            if result:
+                                st.markdown("**Result:**")
+                                if isinstance(result, (dict, list)):
+                                    st.json(result)
+                                else:
+                                    st.text(str(result))
+        
+        else:
+            # Regular single event (not paired)
+            # Extract relevant info based on event type
+            label_parts = [f"{indent}{get_event_icon(event.type)} {event.type.value}"]
+            
+            if event.action != ActionType.START and event.action != ActionType.END:
+                label_parts.append(f"- {event.action.value}")
+            
+            # Add specific info based on event type
+            if event.type == TraceType.USER:
+                message = event.details.get("message", "")
+                if message:
+                    label_parts.append(f": 📝 {message[:100]}{'...' if len(message) > 100 else ''}")
+                # Check if there's a response in a sibling end event
+                if event.parent_id is None:  # Root user event
+                    for e in events:
+                        if e.type == TraceType.AGENT and e.action == ActionType.PROCESS and e.details.get("label") == "Final Response":
+                            resp = e.details.get("response", {})
+                            if isinstance(resp, dict) and "output" in resp:
+                                label_parts.append(f"| response: {resp['output'][:50]}...")
+                            break
+            
+            elif event.type == TraceType.AGENT:
+                name = event.details.get("name", "")
+                if name:
+                    label_parts.append(f"| Name: {name}")
+                
+                if event.action == ActionType.START:
+                    duration = calculate_duration(event)
+                    label_parts.append(f"| ({duration})")
+                elif event.action == ActionType.PROCESS:
+                    label_text = event.details.get("label", "")
+                    if label_text:
+                        label_parts.append(f"| Label: {label_text}")
+                    response = event.details.get("response", "")
+                    if response:
+                        if isinstance(response, dict):
+                            label_parts.append(f"| response: {str(response)[:50]}...")
+                        else:
+                            label_parts.append(f"| response: 📝 {response[:50]}...")
+            
+            # Timestamp for single events
+            label_parts.append(f"| ({format_timestamp(event.timestamp)})")
+            
+            # Create expander
+            with st.expander(" ".join(label_parts), expanded=level < 2):
                 st.markdown(f"**ID:** `{event.id}`")
                 if event.parent_id:
                     st.markdown(f"**Parent:** `{event.parent_id}`")
+                
+                # Show all non-empty details
+                for key, value in event.details.items():
+                    if value and key not in ["args", "kwargs"] and not key.startswith("_"):
+                        st.markdown(f"**{key}:**")
+                        if isinstance(value, (dict, list)):
+                            st.json(value)
+                        else:
+                            st.text(str(value))
 
-            with col2:
-                label = event.details.get("label", "")
-                if label:
-                    st.markdown(f"**Label:** {label}")
-
-                name = event.details.get("name", "")
-                if name:
-                    st.markdown(f"**Name:** {name}")
-
-            with col3:
-                # Also check in args for prompt/message (for LLM calls)
-                args = event.details.get("args", {})
-                if not prompt and isinstance(args, dict):
-                    prompt = args.get("prompt", "")
-                if not message and isinstance(args, dict):
-                    message = args.get("message", "")
-                    # Also check for user_query in args (for planning steps)
-                    if not message:
-                        message = args.get("user_query", "")
-
-                # Show input message/prompt
-                if message:
-                    display_message = (
-                        message[:100] + "..." if len(message) > 100 else message
-                    )
-                    st.markdown(f"**入力:** {display_message}")
-                elif prompt:
-                    display_prompt = (
-                        prompt[:100] + "..." if len(prompt) > 100 else prompt
-                    )
-                    st.markdown(f"**プロンプト:** {display_prompt}")
-                elif event.type == TraceType.TOOL and isinstance(args, dict):
-                    # For tools, show the main argument values
-                    tool_args = []
-                    for key, value in args.items():
-                        if key not in ["kwargs", "args"] and value:
-                            str_val = (
-                                str(value)[:30] + "..."
-                                if len(str(value)) > 30
-                                else str(value)
-                            )
-                            tool_args.append(f"{key}: {str_val}")
-                    if tool_args:
-                        st.markdown(f"**引数:** {', '.join(tool_args[:2])}")
-
-                # Show output response/result
-                if response:
-                    display_response = (
-                        response[:100] + "..." if len(response) > 100 else response
-                    )
-                    st.markdown(f"**出力:** {display_response}")
-                elif result and result != "":
-                    display_result = (
-                        str(result)[:100] + "..."
-                        if len(str(result)) > 100
-                        else str(result)
-                    )
-                    st.markdown(f"**結果:** {display_result}")
-                elif event.action == ActionType.PROCESS:
-                    # For process actions, show the label or strategy if no response
-                    strategy = event.details.get("strategy", "")
-                    if strategy:
-                        st.markdown(f"**戦略:** {strategy}")
-
-                # Show error if present
-                if error:
-                    display_error = error[:100] + "..." if len(error) > 100 else error
-                    st.markdown(f"**エラー:** :red[{display_error}]")
-
-                # Show other important details if space allows
-                exclude_keys = {
-                    "label",
-                    "name",
-                    "function",
-                    "args",
-                    "kwargs",
-                    "message",
-                    "response",
-                    "result",
-                    "prompt",
-                    "error",
-                }
-                other_details = {
-                    k: v
-                    for k, v in event.details.items()
-                    if k not in exclude_keys and not k.startswith("_")
-                }
-
-                if other_details:
-                    # Show up to 2 additional details
-                    for key, value in list(other_details.items())[:2]:
-                        if isinstance(value, str) and len(value) > 50:
-                            value = value[:50] + "..."
-                        st.markdown(f"**{key}:** {value}")
-
-            # Render children
-            if event.id in tree:
-                for child in tree[event.id]:
-                    render_node(child, level + 1)
+        # Render children (skip already processed paired events)
+        if event.id in tree:
+            for child in tree[event.id]:
+                render_node(child, level + 1, skip_ids)
 
     # Render root nodes
     root_events = tree[None]
