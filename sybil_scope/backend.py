@@ -4,6 +4,7 @@ Backend implementations for storing trace data.
 
 import json
 import os
+import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -37,18 +38,29 @@ class FileBackend(Backend):
     directory and generates informative filenames including timestamp and PID.
     """
 
-    def __init__(self, filepath: Path | None = None):
+    def __init__(self, filepath: Path | None = None, name_format: str | None = None):
         """Initialize file backend.
 
         Args:
             filepath: Path to JSONL file. If not provided, defaults to
                 'traces/traces_{YYYYMMDD}_{HHMMSS}_{PID}.jsonl'.
+            name_format: Format of the trace file (e.g., "jsonl", "csv"). If not provided, "traces_{timestamp}.{extension}"
+                - {timestamp}: The timestamp when the trace was created
+                - {extension}: The file extension (e.g., "jsonl", "csv")
+                - {pid}: The process ID (PID) of the Python process
+                - {random}: A random string (for uniqueness)
         """
         if filepath is None:
+            if name_format is None:
+                name_format = "traces_{timestamp}.{extension}"
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            pid = os.getpid()
             default_dir = Path("traces")
-            filepath = default_dir / f"traces_{timestamp}_{pid}.jsonl"
+            filepath = default_dir / name_format.format(
+                timestamp=timestamp,
+                extension="jsonl",
+                pid=os.getpid(),
+                random=uuid.uuid4().hex,
+            )
 
         self.filepath = Path(filepath)
 
