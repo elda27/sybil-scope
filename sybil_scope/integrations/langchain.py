@@ -3,7 +3,7 @@ LangChain integration for Sibyl Scope.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import UUID
 
 from sybil_scope.api import Tracer
@@ -11,7 +11,7 @@ from sybil_scope.core import ActionType, TraceType
 
 try:
     from langchain.callbacks.base import BaseCallbackHandler
-    from langchain.schema import AgentAction, AgentFinish, Document, LLMResult
+    from langchain.schema import AgentAction, AgentFinish, LLMResult
 
     LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -22,7 +22,7 @@ except ImportError:
 class SibylScopeCallbackHandler(BaseCallbackHandler):
     """LangChain callback handler for Sibyl Scope tracing."""
 
-    def __init__(self, tracer: Optional[Tracer] = None):
+    def __init__(self, tracer: Tracer | None = None):
         """Initialize callback handler.
 
         Args:
@@ -35,10 +35,10 @@ class SibylScopeCallbackHandler(BaseCallbackHandler):
 
         super().__init__()
         self.tracer = tracer or Tracer()
-        self._run_id_to_trace_id: Dict[UUID, int] = {}
+        self._run_id_to_trace_id: dict[UUID, int] = {}
 
     def on_llm_start(
-        self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
+        self, serialized: dict[str, Any], prompts: list[str], **kwargs: Any
     ) -> None:
         """Run when LLM starts running."""
         run_id = kwargs.get("run_id", "unknown")
@@ -88,10 +88,10 @@ class SibylScopeCallbackHandler(BaseCallbackHandler):
 
     def on_llm_error(
         self,
-        error: Union[Exception, KeyboardInterrupt],
+        error: Exception | KeyboardInterrupt,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = ...,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Run when LLM errors."""
@@ -106,7 +106,7 @@ class SibylScopeCallbackHandler(BaseCallbackHandler):
         )
 
     def on_chain_start(
-        self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any
+        self, serialized: dict[str, Any], inputs: dict[str, Any], **kwargs: Any
     ) -> None:
         """Run when chain starts running."""
         run_id = kwargs.get("run_id", "unknown")
@@ -131,7 +131,7 @@ class SibylScopeCallbackHandler(BaseCallbackHandler):
 
         self._run_id_to_trace_id[run_id] = trace_id
 
-    def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
+    def on_chain_end(self, outputs: dict[str, Any], **kwargs: Any) -> None:
         """Run when chain ends running."""
         run_id = kwargs.get("run_id", "unknown")
         parent_trace_id = self._run_id_to_trace_id.get(run_id)
@@ -147,14 +147,12 @@ class SibylScopeCallbackHandler(BaseCallbackHandler):
 
             self.tracer.log(TraceType.AGENT, ActionType.END, parent_id=original_parent)
 
-        # self.tracer.log(TraceType.AGENT, ActionType.END, parent_id=parent_trace_id)
-
     def on_chain_error(
         self,
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = ...,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Run when chain errors."""
@@ -170,7 +168,7 @@ class SibylScopeCallbackHandler(BaseCallbackHandler):
         )
 
     def on_tool_start(
-        self, serialized: Dict[str, Any], input_str: str, **kwargs: Any
+        self, serialized: dict[str, Any], input_str: str, **kwargs: Any
     ) -> None:
         """Run when tool starts running."""
         run_id = kwargs.get("run_id", "unknown")
@@ -206,10 +204,10 @@ class SibylScopeCallbackHandler(BaseCallbackHandler):
 
     def on_tool_error(
         self,
-        error: Union[Exception, KeyboardInterrupt],
+        error: Exception | KeyboardInterrupt,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = ...,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Run when tool errors."""
