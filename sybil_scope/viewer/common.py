@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
+from enum import Enum
 from typing import Any, TypedDict
 
 from sybil_scope.core import ActionType, TraceEvent, TraceType
@@ -587,3 +588,22 @@ VIZ_OPTIONS = [
     "🌊 Flow Diagram",
     "📋 Table View",
 ]
+
+
+class VizOption(Enum):
+    """Enum for visualization options shown in the app UI."""
+
+    STATISTICS = "📊 Statistics"
+    HIERARCHICAL = "🌳 Hierarchical"
+    TIMELINE = "📅 Timeline"
+    FLOW_DIAGRAM = "🌊 Flow Diagram"
+    TABLE_VIEW = "📋 Table View"
+
+    def __str__(self) -> str:
+        # Helpful when Streamlit needs to render option values
+        return self.value
+
+
+# Keep VIZ_OPTIONS for backwards compatibility with tests and any external imports
+# while encouraging use of VizOption where possible.
+VIZ_OPTIONS = [opt.value for opt in VizOption]

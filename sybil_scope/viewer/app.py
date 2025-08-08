@@ -5,21 +5,20 @@ Streamlit application for visualizing Sibyl Scope trace data.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-import pandas as pd
+import pandas as pd  # type: ignore  # pyright: ignore[reportMissingTypeStubs]
 import streamlit as st
 
 from sybil_scope.backend import FileBackend
 from sybil_scope.core import ActionType, TraceEvent, TraceType
 from sybil_scope.viewer.common import (
-    VIZ_OPTIONS,
     EventStyleHelper,
     TimeHelper,
-    TraceEventTree,
     TreeStructureBuilder,
+    VizOption,
 )
 from sybil_scope.viewer.flow_diagram import render_flow_diagram
+from sybil_scope.viewer.hierarchical_view import render_hierarchical_view
 from sybil_scope.viewer.table_view import render_table_view
 from sybil_scope.viewer.timeline import render_timeline_visualization
 
@@ -76,438 +75,7 @@ def render_event_details(event: TraceEvent):
             st.code(details_json, language="json")
 
 
-def render_hierarchical_view(events: list[TraceEvent], tree: TraceEventTree):
-    """Render hierarchical tree view of events according to ARCHITECTURE.md specifications."""
-    st.markdown("### 🌳 Hierarchical View")
-
-    def find_paired_events(events_list: list[TraceEvent]) -> dict[int, TraceEvent]:
-        """Find request/response and call/response pairs for LLM and Tool events."""
-        pairs = {}
-        for event in events_list:
-            # LLM request/response pairs
-            if event.action == ActionType.REQUEST and event.type == TraceType.LLM:
-                for potential_response in events_list:
-                    if (
-                        potential_response.action == ActionType.RESPOND
-                        and potential_response.type == TraceType.LLM
-                        and potential_response.parent_id == event.id
-                    ):
-                        pairs[event.id] = potential_response
-                        break
-            # Tool call/response pairs
-            elif event.action == ActionType.CALL and event.type == TraceType.TOOL:
-                for potential_response in events_list:
-                    if (
-                        potential_response.action == ActionType.RESPOND
-                        and potential_response.type == TraceType.TOOL
-                        and potential_response.parent_id == event.id
-                    ):
-                        pairs[event.id] = potential_response
-                        break
-        return pairs
-
-    def find_agent_start_end_pairs(events_list: list[TraceEvent]) -> dict[int, int]:
-        """Find matching agent start/end pairs based on chronological order."""
-        # Group agents by parent_id
-        agents_by_parent = {}
-        for event in events_list:
-            if event.type == TraceType.AGENT and event.action in [
-                ActionType.START,
-                ActionType.END,
-            ]:
-                parent = event.parent_id
-                if parent not in agents_by_parent:
-                    agents_by_parent[parent] = {"starts": [], "ends": []}
-                if event.action == ActionType.START:
-                    agents_by_parent[parent]["starts"].append(event)
-                else:
-                    agents_by_parent[parent]["ends"].append(event)
-
-        # Match starts with ends chronologically
-        agent_pairs = {}
-        for parent, agents in agents_by_parent.items():
-            starts = sorted(agents["starts"], key=lambda x: x.timestamp)
-            ends = sorted(agents["ends"], key=lambda x: x.timestamp)
-
-            # Match each start with the next end
-            for i, start in enumerate(starts):
-                if i < len(ends):
-                    agent_pairs[start.id] = ends[i].id
-
-        return agent_pairs
-
-    def calculate_duration(
-        start_event: TraceEvent,
-        end_event: TraceEvent = None,
-        agent_pairs: dict[int, int] = None,
-    ) -> str:
-        """Calculate duration between two events."""
-        if end_event:
-            duration = (end_event.timestamp - start_event.timestamp).total_seconds()
-            return f"{duration:.3f}s"
-        else:
-            # For agent events, try to find corresponding end event using agent_pairs
-            if (
-                start_event.type == TraceType.AGENT
-                and start_event.action == ActionType.START
-                and agent_pairs
-            ):
-                end_id = agent_pairs.get(start_event.id)
-                if end_id:
-                    for event in events:
-                        if event.id == end_id:
-                            duration = (
-                                event.timestamp - start_event.timestamp
-                            ).total_seconds()
-                            return f"{duration:.3f}s"
-
-            # If no end event, calculate from children
-            children = tree.get(start_event.id, [])
-            if children:
-                latest_child = max(children, key=lambda x: x.timestamp)
-                duration = (
-                    latest_child.timestamp - start_event.timestamp
-                ).total_seconds()
-                return f"{duration:.3f}s"
-            return "0.000s"
-
-    def format_args_for_display(args: dict, max_length: int = 50) -> str:
-        """Format arguments dict for display in expander label."""
-        if not args:
-            return ""
-        arg_parts = []
-        for key, value in args.items():
-            if key not in ["kwargs", "args", "_type"] and value:
-                if isinstance(value, list):
-                    if len(value) > 0 and isinstance(value[0], str):
-                        # For lists, show first element
-                        str_val = str(value[0])[:max_length] + (
-                            "..." if len(str(value[0])) > max_length else ""
-                        )
-                    else:
-                        str_val = str(value)[:max_length] + (
-                            "..." if len(str(value)) > max_length else ""
-                        )
-                else:
-                    str_val = str(value)[:max_length] + (
-                        "..." if len(str(value)) > max_length else ""
-                    )
-                arg_parts.append(f"{key}: {str_val}")
-        return ", ".join(arg_parts[:2])  # Show only first 2 args
-
-    def format_result_for_display(result: Any, error: str = None) -> str:
-        """Format result or error for display in expander label."""
-        if error:
-            return (
-                f"❌error: {error[:50]}..." if len(error) > 50 else f"❌error: {error}"
-            )
-
-        if isinstance(result, dict):
-            # For dict results, show key-value pairs
-            result_parts = []
-            for key, value in result.items():
-                str_val = str(value)[:30] + ("..." if len(str(value)) > 30 else "")
-                result_parts.append(f"{key}: {str_val}")
-            return ", ".join(result_parts[:2])
-        elif isinstance(result, list):
-            # For list results, show count and first item
-            if len(result) > 0:
-                return f"[{len(result)} items] {str(result[0])[:50]}..."
-            return "[empty]"
-        else:
-            return str(result)[:100] + ("..." if len(str(result)) > 100 else "")
-
-    # Calculate agent pairs once
-    agent_pairs = find_agent_start_end_pairs(events)
-
-    def render_node(event: TraceEvent, level: int = 0, skip_ids: set = None):
-        """Recursively render a node and its children."""
-        if skip_ids is None:
-            skip_ids = set()
-
-        if event.id in skip_ids:
-            return
-
-        indent = "　" * level  # Japanese space for better alignment
-
-        # Note: Agent end events are already filtered out in build_corrected_tree_structure
-
-        # Check if this event has a pair (request/response or call/response)
-        pairs = find_paired_events(events)
-        paired_event = pairs.get(event.id)
-
-        if paired_event:
-            # This is a paired event - render as single expander
-            skip_ids.add(paired_event.id)
-
-            # Build label based on event type
-            if event.type == TraceType.LLM:
-                # Extract prompt from request
-                prompt_text = ""
-                args = event.details.get("args", {})
-                if isinstance(args, dict):
-                    prompts = args.get("prompts", [])
-                    if prompts and isinstance(prompts, list) and len(prompts) > 0:
-                        prompt_text = prompts[0][:100] + (
-                            "..." if len(prompts[0]) > 100 else ""
-                        )
-                    else:
-                        prompt_text = args.get("prompt", "")[:100] + (
-                            "..." if len(args.get("prompt", "")) > 100 else ""
-                        )
-
-                # Extract response
-                response_text = paired_event.details.get("response", "")[:100]
-                if len(paired_event.details.get("response", "")) > 100:
-                    response_text += "..."
-
-                duration = calculate_duration(event, paired_event, agent_pairs)
-
-                label = f"{indent}{get_event_icon(event.type)} {event.type.value}"
-                if prompt_text:
-                    label += f' | 📝prompt: "{prompt_text}"'
-                if response_text:
-                    label += f" | 📝response: {response_text}"
-                label += f" | ({duration})"
-
-            elif event.type == TraceType.TOOL:
-                # Tool call/response pair
-                tool_name = event.details.get("name", "")
-                args_text = format_args_for_display(event.details.get("args", {}))
-
-                # Check for error or result in response
-                error = paired_event.details.get("error", "")
-                result = paired_event.details.get("result", "")
-                result_text = format_result_for_display(result, error)
-
-                duration = calculate_duration(event, paired_event, agent_pairs)
-
-                label = f"{indent}{get_event_icon(event.type)} {event.type.value}"
-                if tool_name:
-                    label += f" | name: {tool_name}"
-                if args_text:
-                    label += f" | 📝args: {args_text}"
-                if result_text:
-                    label += f" | {'📝result' if not error else ''}: {result_text}"
-                label += f" | ({duration})"
-
-            # Create expander for paired event
-            with st.expander(label, expanded=level < 2):
-                col1, col2 = st.columns([1, 1])
-
-                with col1:
-                    if event.type == TraceType.LLM:
-                        st.markdown(f"**Request ID:** `{event.id}`")
-                        st.markdown(f"**Response ID:** `{paired_event.id}`")
-                    else:  # Tool
-                        st.markdown(f"**Call ID:** `{event.id}`")
-                        st.markdown(f"**Response ID:** `{paired_event.id}`")
-
-                    if event.parent_id:
-                        st.markdown(f"**Parent:** `{event.parent_id}`")
-
-                    # Model info for LLM
-                    if event.type == TraceType.LLM:
-                        model = event.details.get("model", "")
-                        if model:
-                            st.markdown(f"**model:** {model}")
-
-                    # Tool name
-                    if event.type == TraceType.TOOL:
-                        tool_name = event.details.get("name", "")
-                        if tool_name:
-                            st.markdown(f"**Tool name:** {tool_name}")
-
-                with col2:
-                    # Show full details
-                    if event.type == TraceType.LLM:
-                        args = event.details.get("args", {})
-                        if args:
-                            st.markdown("**Args:**")
-                            # Show important LLM parameters
-                            for key in ["temperature", "max_tokens", "model_name"]:
-                                if key in args:
-                                    st.text(f"  {key}: {args[key]}")
-
-                        st.markdown("**Response:**")
-                        st.text(paired_event.details.get("response", "")[:500])
-
-                        # Show token usage if available
-                        llm_output = paired_event.details.get("llm_output", {})
-                        if llm_output:
-                            st.markdown("**LLM Output:**")
-                            st.json(llm_output)
-
-                    elif event.type == TraceType.TOOL:
-                        # Show args
-                        args = event.details.get("args", {})
-                        if args:
-                            st.markdown("**Args:**")
-                            st.json(args)
-
-                        # Show result or error
-                        error = paired_event.details.get("error", "")
-                        if error:
-                            st.markdown("**Error:**")
-                            st.error(error)
-                            error_type = paired_event.details.get("error_type", "")
-                            if error_type:
-                                st.text(f"Error Type: {error_type}")
-                        else:
-                            result = paired_event.details.get("result", "")
-                            if result:
-                                st.markdown("**Result:**")
-                                if isinstance(result, (dict, list)):
-                                    st.json(result)
-                                else:
-                                    st.text(str(result))
-
-        else:
-            # Regular single event (not paired)
-            # Extract relevant info based on event type
-            label_parts = [f"{indent}{get_event_icon(event.type)} {event.type.value}"]
-
-            if event.action != ActionType.START and event.action != ActionType.END:
-                label_parts.append(f"- {event.action.value}")
-
-            # Add specific info based on event type
-            if event.type == TraceType.USER:
-                message = event.details.get("message", "")
-                if message:
-                    label_parts.append(
-                        f": 📝 {message[:100]}{'...' if len(message) > 100 else ''}"
-                    )
-                # Check if there's a response in a sibling end event
-                if event.parent_id is None:  # Root user event
-                    for e in events:
-                        if (
-                            e.type == TraceType.AGENT
-                            and e.action == ActionType.PROCESS
-                            and e.details.get("label") == "Final Response"
-                        ):
-                            resp = e.details.get("response", {})
-                            if isinstance(resp, dict) and "output" in resp:
-                                label_parts.append(
-                                    f"| response: {resp['output'][:50]}..."
-                                )
-                            break
-
-            elif event.type == TraceType.AGENT:
-                name = event.details.get("name", "")
-                if name:
-                    label_parts.append(f"| Name: {name}")
-
-                if event.action == ActionType.START:
-                    duration = calculate_duration(event, None, agent_pairs)
-                    label_parts.append(f"| ({duration})")
-                elif event.action == ActionType.PROCESS:
-                    label_text = event.details.get("label", "")
-                    if label_text:
-                        label_parts.append(f"| Label: {label_text}")
-                    response = event.details.get("response", "")
-                    if response:
-                        if isinstance(response, dict):
-                            label_parts.append(f"| response: {str(response)[:50]}...")
-                        else:
-                            label_parts.append(f"| response: 📝 {response[:50]}...")
-
-            # Timestamp for single events
-            label_parts.append(f"| ({format_timestamp(event.timestamp)})")
-
-            # Create expander
-            with st.expander(" ".join(label_parts), expanded=level < 2):
-                st.markdown(f"**ID:** `{event.id}`")
-                if event.parent_id:
-                    st.markdown(f"**Parent:** `{event.parent_id}`")
-
-                # Show all non-empty details
-                for key, value in event.details.items():
-                    if (
-                        value
-                        and key not in ["args", "kwargs"]
-                        and not key.startswith("_")
-                    ):
-                        st.markdown(f"**{key}:**")
-                        if isinstance(value, (dict, list)):
-                            st.json(value)
-                        else:
-                            st.text(str(value))
-
-        # Render children (skip already processed paired events)
-        if event.id in tree:
-            for child in tree[event.id]:
-                render_node(child, level + 1, skip_ids)
-
-    # Render root nodes
-    root_events = tree[None]
-    for event in root_events:
-        render_node(event)
-
-
-def render_timeline_view(events: list[TraceEvent]):
-    """Render timeline view of events."""
-    st.markdown("### 📅 Timeline View")
-
-    if not events:
-        st.warning("No events to display")
-        return
-
-    # Calculate time range
-    start_time = min(e.timestamp for e in events)
-    end_time = max(e.timestamp for e in events)
-    total_duration = (end_time - start_time).total_seconds()
-
-    st.markdown(f"**Total Duration:** {total_duration:.3f} seconds")
-
-    # Create timeline data
-    timeline_data = []
-    for event in events:
-        relative_time = (event.timestamp - start_time).total_seconds()
-        timeline_data.append(
-            {
-                "Time (s)": f"{relative_time:.3f}",
-                "Type": get_event_icon(event.type) + " " + event.type.value,
-                "Action": event.action.value,
-                "Label": event.details.get("label", event.details.get("name", "")),
-                "ID": event.id,
-                "Parent ID": event.parent_id or "",
-            }
-        )
-
-    # Display as dataframe
-    df = pd.DataFrame(timeline_data)
-
-    # Add filtering options
-    col1, col2 = st.columns(2)
-    with col1:
-        type_filter = st.multiselect(
-            "Filter by Type",
-            options=[t.value for t in TraceType],
-            default=[t.value for t in TraceType],
-        )
-    with col2:
-        action_filter = st.multiselect(
-            "Filter by Action",
-            options=[a.value for a in ActionType],
-            default=[a.value for a in ActionType],
-        )
-
-    # Apply filters
-    mask = df["Type"].str.contains("|".join(type_filter)) & df["Action"].isin(
-        action_filter
-    )
-    filtered_df = df[mask]
-
-    # Display filtered dataframe
-    st.dataframe(
-        filtered_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "ID": st.column_config.NumberColumn(format="%d"),
-            "Parent ID": st.column_config.NumberColumn(format="%d"),
-        },
-    )
+## Timeline view is implemented in sybil_scope.viewer.timeline as render_timeline_visualization
 
 
 def render_statistics_view(events: list[TraceEvent]):
@@ -651,12 +219,12 @@ def main():
         if events:
             st.header("🎨 Display Options")
 
-            # Visualization selection
-
-            viz_options = st.multiselect(
+            # Visualization selection (Enum-based)
+            viz_options: list[VizOption] = st.multiselect(
                 "Select Visualizations:",
-                VIZ_OPTIONS,
-                default=VIZ_OPTIONS,
+                options=list(VizOption),
+                default=list(VizOption),
+                format_func=lambda v: v.value,
                 help="Choose which visualization types to show",
             )
 
@@ -695,35 +263,26 @@ def main():
                 "👈 Please select at least one visualization type from the sidebar"
             )
         else:
+            # Dictionary-based dispatch for render functions
+            render_functions = {
+                VizOption.STATISTICS: lambda: render_statistics_view(events),
+                VizOption.HIERARCHICAL: lambda: render_hierarchical_view(events, tree),
+                VizOption.TIMELINE: lambda: render_timeline_visualization(events),
+                VizOption.FLOW_DIAGRAM: lambda: render_flow_diagram(events),
+                VizOption.TABLE_VIEW: lambda: render_table_view(events),
+            }
+
             # Create tabs for selected visualizations
             if len(viz_options) > 1:
-                selected_tabs = st.tabs(viz_options)
+                selected_tabs = st.tabs([opt.value for opt in viz_options])
 
                 for i, viz_option in enumerate(viz_options):
                     with selected_tabs[i]:
-                        if viz_option == "📊 Statistics":
-                            render_statistics_view(events)
-                        elif viz_option == "🌳 Hierarchical":
-                            render_hierarchical_view(events, tree)
-                        elif viz_option == "📅 Timeline":
-                            render_timeline_visualization(events)
-                        elif viz_option == "🌊 Flow Diagram":
-                            render_flow_diagram(events)
-                        elif viz_option == "📋 Table View":
-                            render_table_view(events)
+                        render_functions[viz_option]()
             else:
                 # Single visualization, no tabs needed
                 viz_option = viz_options[0]
-                if viz_option == "📊 Statistics":
-                    render_statistics_view(events)
-                elif viz_option == "🌳 Hierarchical":
-                    render_hierarchical_view(events, tree)
-                elif viz_option == "📅 Timeline":
-                    render_timeline_visualization(events)
-                elif viz_option == "🌊 Flow Diagram":
-                    render_flow_diagram(events)
-                elif viz_option == "📋 Table View":
-                    render_table_view(events)
+                render_functions[viz_option]()
 
         # Event details viewer (in sidebar)
         with st.sidebar:
