@@ -14,6 +14,7 @@ def _has_viewer_dependencies() -> bool:
     try:
         import pandas  # noqa: F401
         import streamlit  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -88,7 +89,7 @@ class TestTimelineRenderer:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
     def test_timeline_event_sorting(self):
         """Test that events are properly sorted by timestamp."""

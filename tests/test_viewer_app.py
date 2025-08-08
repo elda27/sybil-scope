@@ -4,7 +4,6 @@ Tests for Streamlit app functionality and UI components.
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,6 +15,7 @@ def _has_viewer_dependencies() -> bool:
     try:
         import pandas  # noqa: F401
         import streamlit  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -56,43 +56,39 @@ class TestStreamlitAppHelpers:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
-    @patch("sybil_scope.viewer.app.FileBackend")
-    def test_load_trace_data_success(self, mock_backend_class):
+    def test_load_trace_data_success(self, tmp_path: Path):
         """Test successful loading of trace data."""
         from sybil_scope.viewer.app import load_trace_data
 
-        # Mock the backend
-        mock_backend = MagicMock()
-        mock_backend.load.return_value = self.sample_events
-        mock_backend_class.return_value = mock_backend
+        # Write sample events to a temp JSONL file
+        filepath = tmp_path / "test_traces.jsonl"
+        with open(filepath, "w", encoding="utf-8") as f:
+            for ev in self.sample_events:
+                f.write(ev.model_dump_json() + "\n")
 
-        # Test loading
-        filepath = Path("test_traces.jsonl")
+        # Load from file
         result = load_trace_data(filepath)
 
         # Verify
-        mock_backend_class.assert_called_once_with(filepath=filepath)
-        mock_backend.load.assert_called_once()
-        assert result == self.sample_events
         assert len(result) == 4
+        assert result[0].type == self.sample_events[0].type
+        assert result[0].action == self.sample_events[0].action
+        assert result[-1].details.get("response") == "Hi there!"
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
-    @patch("sybil_scope.viewer.app.FileBackend")
-    def test_load_trace_data_empty_file(self, mock_backend_class):
+    def test_load_trace_data_empty_file(self, tmp_path: Path):
         """Test loading from empty file."""
         from sybil_scope.viewer.app import load_trace_data
 
-        # Mock empty result
-        mock_backend = MagicMock()
-        mock_backend.load.return_value = []
-        mock_backend_class.return_value = mock_backend
+        # Create an empty JSONL file
+        filepath = tmp_path / "empty_traces.jsonl"
+        filepath.write_text("", encoding="utf-8")
 
-        filepath = Path("empty_traces.jsonl")
         result = load_trace_data(filepath)
 
         assert result == []
@@ -100,7 +96,7 @@ class TestStreamlitAppHelpers:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
     def test_get_event_color_all_types(self):
         """Test color retrieval for all event types."""
@@ -118,7 +114,7 @@ class TestStreamlitAppHelpers:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
     def test_get_event_icon_all_types(self):
         """Test icon retrieval for all event types."""
@@ -136,7 +132,7 @@ class TestStreamlitAppHelpers:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
     def test_format_timestamp(self):
         """Test timestamp formatting."""

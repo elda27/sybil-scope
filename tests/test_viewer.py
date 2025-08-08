@@ -4,7 +4,6 @@ Tests for viewer functionality.
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,6 +15,7 @@ def _has_viewer_dependencies() -> bool:
     try:
         import pandas  # noqa: F401
         import streamlit  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -840,35 +840,34 @@ class TestViewerAppHelpers:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
-    @patch("sybil_scope.viewer.app.FileBackend")
-    def test_load_trace_data(self, mock_backend_class):
+    def test_load_trace_data(self, tmp_path: Path):
         """Test loading trace data from file."""
         # Import here to avoid circular import issues
         from sybil_scope.viewer.app import load_trace_data
 
-        # Mock the backend
-        mock_backend = MagicMock()
-        mock_events = [
+        # Prepare a temp JSONL file
+        events = [
             TraceEvent(type=TraceType.USER, action=ActionType.INPUT, details={}),
             TraceEvent(type=TraceType.AGENT, action=ActionType.START, details={}),
         ]
-        mock_backend.load.return_value = mock_events
-        mock_backend_class.return_value = mock_backend
+        filepath = tmp_path / "test_traces.jsonl"
+        with open(filepath, "w", encoding="utf-8") as f:
+            for ev in events:
+                f.write(ev.model_dump_json() + "\n")
 
-        # Test loading
-        filepath = Path("test_traces.jsonl")
+        # Load from file
         result = load_trace_data(filepath)
 
-        # Verify backend was called correctly
-        mock_backend_class.assert_called_once_with(filepath=filepath)
-        mock_backend.load.assert_called_once()
-        assert result == mock_events
+        # Verify
+        assert len(result) == 2
+        assert result[0].type == TraceType.USER
+        assert result[1].action == ActionType.START
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
     def test_get_event_color_integration(self):
         """Test event color function integration."""
@@ -879,7 +878,7 @@ class TestViewerAppHelpers:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
     def test_get_event_icon_integration(self):
         """Test event icon function integration."""
@@ -890,7 +889,7 @@ class TestViewerAppHelpers:
 
     @pytest.mark.skipif(
         not _has_viewer_dependencies(),
-        reason="viewer dependencies (pandas, streamlit) not installed"
+        reason="viewer dependencies (pandas, streamlit) not installed",
     )
     def test_format_timestamp_integration(self):
         """Test timestamp formatting function integration."""

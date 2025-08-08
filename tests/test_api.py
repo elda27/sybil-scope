@@ -2,9 +2,25 @@
 Tests for the main API.
 """
 
-from unittest.mock import Mock
-
 from sybil_scope import ActionType, FileBackend, InMemoryBackend, Tracer, TraceType
+from sybil_scope.backend import Backend
+
+
+class FakeBackend(Backend):
+    """Simple backend implementation to verify flush/save without using mocks."""
+
+    def __init__(self):
+        self.events = []
+        self.flushed = False
+
+    def save(self, event):
+        self.events.append(event)
+
+    def flush(self):
+        self.flushed = True
+
+    def load(self):
+        return list(self.events)
 
 
 class TestTracer:
@@ -113,11 +129,11 @@ class TestTracer:
         assert events[1].action == ActionType.REQUEST
 
     def test_flush(self):
-        backend = Mock()
+        backend = FakeBackend()
         tracer = Tracer(backend=backend)
 
         tracer.flush()
-        backend.flush.assert_called_once()
+        assert backend.flushed is True
 
     def test_get_current_context(self):
         backend = InMemoryBackend()
