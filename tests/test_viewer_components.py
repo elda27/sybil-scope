@@ -9,6 +9,16 @@ import pytest
 from sybil_scope.core import ActionType, TraceEvent, TraceType
 
 
+def _has_viewer_dependencies() -> bool:
+    """Check if viewer dependencies are available."""
+    try:
+        import pandas  # noqa: F401
+        import streamlit  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 class TestTimelineRenderer:
     """Test TimelineRenderer functionality."""
 
@@ -76,6 +86,10 @@ class TestTimelineRenderer:
         assert isinstance(start_time, datetime)
         assert isinstance(end_time, datetime)
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     def test_timeline_event_sorting(self):
         """Test that events are properly sorted by timestamp."""
         from sybil_scope.viewer.timeline import TimelineRenderer

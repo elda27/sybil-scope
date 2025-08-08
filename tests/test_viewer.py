@@ -9,6 +9,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sybil_scope.core import ActionType, TraceEvent, TraceType
+
+
+def _has_viewer_dependencies() -> bool:
+    """Check if viewer dependencies are available."""
+    try:
+        import pandas  # noqa: F401
+        import streamlit  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 from sybil_scope.viewer.common import (
     DEFAULT_COLOR_SCHEME,
     DEFAULT_ICON_SCHEME,
@@ -826,6 +838,10 @@ class TestConstants:
 class TestViewerAppHelpers:
     """Test helper functions from the main app."""
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     @patch("sybil_scope.viewer.app.FileBackend")
     def test_load_trace_data(self, mock_backend_class):
         """Test loading trace data from file."""
@@ -850,6 +866,10 @@ class TestViewerAppHelpers:
         mock_backend.load.assert_called_once()
         assert result == mock_events
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     def test_get_event_color_integration(self):
         """Test event color function integration."""
         from sybil_scope.viewer.app import get_event_color
@@ -857,6 +877,10 @@ class TestViewerAppHelpers:
         assert get_event_color(TraceType.USER) == "#4CAF50"
         assert get_event_color(TraceType.LLM) == "#FF9800"
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     def test_get_event_icon_integration(self):
         """Test event icon function integration."""
         from sybil_scope.viewer.app import get_event_icon
@@ -864,6 +888,10 @@ class TestViewerAppHelpers:
         assert get_event_icon(TraceType.AGENT) == "🤖"
         assert get_event_icon(TraceType.TOOL) == "🔧"
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     def test_format_timestamp_integration(self):
         """Test timestamp formatting function integration."""
         from sybil_scope.viewer.app import format_timestamp

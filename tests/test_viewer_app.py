@@ -11,6 +11,16 @@ import pytest
 from sybil_scope.core import ActionType, TraceEvent, TraceType
 
 
+def _has_viewer_dependencies() -> bool:
+    """Check if viewer dependencies are available."""
+    try:
+        import pandas  # noqa: F401
+        import streamlit  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 class TestStreamlitAppHelpers:
     """Test helper functions used in the Streamlit app."""
 
@@ -44,6 +54,10 @@ class TestStreamlitAppHelpers:
         self.sample_events[2].parent_id = self.sample_events[1].id
         self.sample_events[3].parent_id = self.sample_events[2].id
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     @patch("sybil_scope.viewer.app.FileBackend")
     def test_load_trace_data_success(self, mock_backend_class):
         """Test successful loading of trace data."""
@@ -64,6 +78,10 @@ class TestStreamlitAppHelpers:
         assert result == self.sample_events
         assert len(result) == 4
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     @patch("sybil_scope.viewer.app.FileBackend")
     def test_load_trace_data_empty_file(self, mock_backend_class):
         """Test loading from empty file."""
@@ -80,6 +98,10 @@ class TestStreamlitAppHelpers:
         assert result == []
         assert len(result) == 0
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     def test_get_event_color_all_types(self):
         """Test color retrieval for all event types."""
         from sybil_scope.viewer.app import get_event_color
@@ -94,6 +116,10 @@ class TestStreamlitAppHelpers:
         for event_type, expected_color in expected_colors.items():
             assert get_event_color(event_type) == expected_color
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     def test_get_event_icon_all_types(self):
         """Test icon retrieval for all event types."""
         from sybil_scope.viewer.app import get_event_icon
@@ -108,6 +134,10 @@ class TestStreamlitAppHelpers:
         for event_type, expected_icon in expected_icons.items():
             assert get_event_icon(event_type) == expected_icon
 
+    @pytest.mark.skipif(
+        not _has_viewer_dependencies(),
+        reason="viewer dependencies (pandas, streamlit) not installed"
+    )
     def test_format_timestamp(self):
         """Test timestamp formatting."""
         from sybil_scope.viewer.app import format_timestamp

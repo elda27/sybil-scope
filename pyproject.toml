@@ -4,11 +4,7 @@ version = "0.1.0"
 description = "Comprehensive tracing and observability toolkit for Python AI/LLM applications"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "plotly>=6.2.0",
-    "pydantic>=2.11.5",
-    "streamlit>=1.47.0",
-]
+dependencies = ["pydantic>=2.11.5"]
 
 [tool.setuptools.packages.find]
 include = ["sybil_scope*"]
@@ -16,10 +12,11 @@ exclude = ["tests*", "examples*", "docker*"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.0",
- "pytest-cov>=6.2.0",
- "pytest-mock>=3.14.1",
- "ruff>=0.12.8",
+  "pytest>=8.4.0",
+  "pytest-cov>=6.2.0",
+  "pytest-mock>=3.14.1",
+  "pyvis>=0.3.2",
+  "ruff>=0.12.8",
 ]
 langchain = [
   "langchain>=0.3.25",
@@ -28,4 +25,11 @@ langchain = [
   "langchain-openai>=0.3.24",
   "langgraph>=0.4.8",
 ]
-viewer = ["streamlit>=1.46.1", "plotly>=5.0.0", "pyvis>=0.3.0", "graphviz>=0.20.0"]
+viewer = [
+  "plotly>=6.2.0",
+  "streamlit>=1.46.1",
+  "plotly>=5.0.0",
+  "pyvis>=0.3.0",
+  "graphviz>=0.20.0",
+  "pandas>=2.3.1",
+]

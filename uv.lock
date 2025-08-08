@@ -2692,9 +2692,7 @@ name = "sibyl-scope"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "plotly" },
     { name = "pydantic" },
-    { name = "streamlit" },
 ]
 
 [package.dev-dependencies]
@@ -2702,6 +2700,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
+    { name = "pyvis" },
     { name = "ruff" },
 ]
 langchain = [
@@ -2713,23 +2712,21 @@ langchain = [
 ]
 viewer = [
     { name = "graphviz" },
+    { name = "pandas" },
     { name = "plotly" },
     { name = "pyvis" },
     { name = "streamlit" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "plotly", specifier = ">=6.2.0" },
-    { name = "pydantic", specifier = ">=2.11.5" },
-    { name = "streamlit", specifier = ">=1.47.0" },
-]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11.5" }]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=8.4.0" },
     { name = "pytest-cov", specifier = ">=6.2.0" },
     { name = "pytest-mock", specifier = ">=3.14.1" },
+    { name = "pyvis", specifier = ">=0.3.2" },
     { name = "ruff", specifier = ">=0.12.8" },
 ]
 langchain = [
@@ -2741,7 +2738,9 @@ langchain = [
 ]
 viewer = [
     { name = "graphviz", specifier = ">=0.20.0" },
+    { name = "pandas", specifier = ">=2.3.1" },
     { name = "plotly", specifier = ">=5.0.0" },
+    { name = "plotly", specifier = ">=6.2.0" },
     { name = "pyvis", specifier = ">=0.3.0" },
     { name = "streamlit", specifier = ">=1.46.1" },
 ]
