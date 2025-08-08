@@ -46,7 +46,7 @@ class Tracer:
 
         # Create trace event
         event = TraceEvent(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(),
             type=trace_type,
             action=action,
             parent_id=parent_id
@@ -74,7 +74,7 @@ class Tracer:
             # Log end event if this was an agent
             if trace_type == TraceType.AGENT and action == ActionType.START:
                 end_event = TraceEvent(
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(),
                     type=TraceType.AGENT,
                     action=ActionType.END,
                     parent_id=event.parent_id,
@@ -104,7 +104,7 @@ class Tracer:
             action = ActionType(action)
 
         event = TraceEvent(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(),
             type=trace_type,
             action=action,
             parent_id=parent_id

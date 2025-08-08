@@ -5,9 +5,18 @@ Core data models and types for Sibyl Scope.
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.functional_serializers import PlainSerializer
+
+# Custom datetime serializer for JSON output
+IsoDateTime = Annotated[
+    datetime,
+    PlainSerializer(
+        lambda x: x.strftime("%Y-%m-%dT%H:%M:%S.%fZ"), return_type=str, when_used="json"
+    ),
+]
 
 
 class TraceType(str, Enum):
@@ -31,20 +40,35 @@ class ActionType(str, Enum):
     CALL = "call"
 
 
+def _generate_trace_id() -> int:
+    """Generate a unique trace ID using UUID."""
+    return uuid.uuid4().int >> 64  # Use upper 64 bits for smaller int
+
+
 class TraceEvent(BaseModel):
-    """Represents a single trace event."""
+    """Represents a single trace event in the Sibyl Scope tracing system."""
 
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    type: TraceType
-    action: ActionType
+    model_config = ConfigDict()
+
+    timestamp: IsoDateTime = Field(
+        default_factory=datetime.now,
+        description="UTC timestamp when the trace event occurred",
+    )
+    type: TraceType = Field(description="Type of trace event (user, agent, llm, tool)")
+    action: ActionType = Field(
+        description="Action being performed (input, start, end, process, request, respond, call)"
+    )
     id: int = Field(
-        default_factory=lambda: uuid.uuid4().int >> 64
-    )  # Use upper 64 bits for smaller int
-    parent_id: int | None = None
-    details: dict[str, Any] = Field(default_factory=dict)
-
-    class Config:
-        json_encoders = {datetime: lambda v: v.strftime("%Y-%m-%dT%H:%M:%S.%fZ")}
+        default_factory=_generate_trace_id,
+        description="Unique identifier for this trace event",
+    )
+    parent_id: int | None = Field(
+        default=None, description="ID of the parent trace event, if any"
+    )
+    details: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional details and metadata for the trace event",
+    )
 
 
 class TraceContext:
