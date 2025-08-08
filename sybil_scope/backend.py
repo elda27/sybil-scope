@@ -3,6 +3,7 @@ Backend implementations for storing trace data.
 """
 
 import json
+import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -30,19 +31,32 @@ class Backend(ABC):
 
 
 class FileBackend(Backend):
-    """File-based backend that stores traces in JSONL format."""
+    """File-based backend that stores traces in JSONL format.
+
+    By default, it writes to a 'traces/' directory in the current working
+    directory and generates informative filenames including timestamp and PID.
+    """
 
     def __init__(self, filepath: Path | None = None):
         """Initialize file backend.
 
         Args:
-            filepath: Path to JSONL file. Defaults to traces_{timestamp}.jsonl
+            filepath: Path to JSONL file. If not provided, defaults to
+                'traces/traces_{YYYYMMDD}_{HHMMSS}_{PID}.jsonl'.
         """
         if filepath is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filepath = Path(f"traces_{timestamp}.jsonl")
+            pid = os.getpid()
+            default_dir = Path("traces")
+            filepath = default_dir / f"traces_{timestamp}_{pid}.jsonl"
 
         self.filepath = Path(filepath)
+
+        # Ensure the parent directory exists (create if needed)
+        parent = self.filepath.parent
+        if str(parent) != "" and not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
+
         self._buffer: list[TraceEvent] = []
         self._buffer_size = 10  # Flush every 10 events
 
@@ -58,7 +72,12 @@ class FileBackend(Backend):
         if not self._buffer:
             return
 
-        with open(self.filepath, "a") as f:
+        # Re-ensure directory exists in case of path changes
+        parent = self.filepath.parent
+        if str(parent) != "" and not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
+
+        with open(self.filepath, "a", encoding="utf-8") as f:
             for event in self._buffer:
                 f.write(event.model_dump_json() + "\n")
 
@@ -70,7 +89,7 @@ class FileBackend(Backend):
             return []
 
         events = []
-        with open(self.filepath, "r") as f:
+        with open(self.filepath, "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     event_data = json.loads(line)

@@ -1,5 +1,5 @@
 """
-Example of using Sibyl Scope with LangChain.
+Example of using Sibyl Scope with LangChain (v0.3+ APIs).
 """
 
 import os
@@ -9,18 +9,18 @@ from sybil_scope.integrations.langchain import SibylScopeCallbackHandler
 
 # Check if langchain is available
 try:
-    from langchain.agents import AgentType, initialize_agent
-    from langchain.chains import LLMChain
-    from langchain.chat_models import ChatOpenAI
-    from langchain.llms import OpenAI
-    from langchain.prompts import PromptTemplate
-    from langchain.tools import Tool
+    # Modern LC imports
+    from langchain.agents import AgentExecutor, create_react_agent
+    from langchain_core.output_parsers import StrOutputParser
+    from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+    from langchain_core.tools import tool
+    from langchain_openai import ChatOpenAI
 
     LANGCHAIN_AVAILABLE = True
-except ImportError:
+except Exception:
     LANGCHAIN_AVAILABLE = False
     print(
-        "LangChain not installed. Install with: pip install langchain langchain-openai"
+        "LangChain v0.3+ not installed. Install with: pip install langchain langchain-openai"
     )
 
 
@@ -31,23 +31,53 @@ def example_langchain_simple_chain():
         return
 
     # Create tracer and callback
-    tracer = Tracer()
+    tracer = Tracer()  # default FileBackend now writes to traces/ folder
     callback = SibylScopeCallbackHandler(tracer)
 
-    # Create a simple chain
-    llm = OpenAI(temperature=0.7, callbacks=[callback])
+    # Create a simple chain (Runnable)
+    llm = ChatOpenAI(temperature=0.7, callbacks=[callback])
     prompt = PromptTemplate(
         input_variables=["topic"], template="Write a short poem about {topic}."
     )
-    chain = LLMChain(llm=llm, prompt=prompt, callbacks=[callback])
+    chain = prompt | llm | StrOutputParser()
 
     # Run the chain
-    result = chain.run(topic="artificial intelligence")
+    result = chain.invoke({"topic": "artificial intelligence"})
     print(f"Result: {result}")
 
     # Flush traces
     tracer.flush()
     print(f"Traces saved to: {tracer.backend.filepath}")
+
+
+def build_react_prompt() -> ChatPromptTemplate:
+    """Build a ChatPromptTemplate compatible with create_react_agent.
+
+    The prompt must include the input variables: "input", "tools", "tool_names",
+    and a MessagesPlaceholder named "agent_scratchpad".
+    """
+    instructions = (
+        "You are a helpful assistant. Use tools to answer questions.\n\n"
+        "You have access to the following tools:\n{tools}\n\n"
+        "The available tool names are: {tool_names}.\n\n"
+        "When you need to use a tool, follow EXACTLY this format:\n\n"
+        "Thought: think about what to do next\n"
+        "Action: the action to take, one of [{tool_names}]\n"
+        "Action Input: the input to the action (as JSON or plain text appropriate for the tool)\n"
+        "Observation: the result of the action\n"
+        "... (you can repeat Thought/Action/Action Input/Observation multiple times)\n"
+        "Thought: I now know the final answer\n"
+        "Final Answer: the final answer to the original input question\n"
+    )
+
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", instructions),
+            ("human", "{input}"),
+            # String scratchpad that accumulates prior Thoughts/Actions/Observations
+            ("assistant", "{agent_scratchpad}"),
+        ]
+    )
 
 
 def example_langchain_agent():
@@ -61,41 +91,43 @@ def example_langchain_agent():
     callback = SibylScopeCallbackHandler(tracer)
 
     # Create custom tools
-    def weather_tool(location: str) -> str:
+    @tool
+    def weather(location: str) -> str:
         """Get weather for a location."""
-        # Simulate weather API
         return f"The weather in {location} is sunny and 22°C"
 
-    def news_tool(topic: str) -> str:
+    @tool
+    def news(topic: str) -> str:
         """Get news about a topic."""
-        # Simulate news API
         return f"Latest news about {topic}: Major breakthrough announced"
 
-    tools = [
-        Tool(
-            name="Weather",
-            func=weather_tool,
-            description="Get current weather for a location",
-        ),
-        Tool(name="News", func=news_tool, description="Get latest news about a topic"),
-    ]
+    tools = [weather, news]
 
-    # Create agent
+    # Create a ReAct agent
     llm = ChatOpenAI(temperature=0, callbacks=[callback])
-    agent = initialize_agent(
-        tools,
-        llm,
-        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+    react_prompt = build_react_prompt()
+    agent = create_react_agent(llm, tools, react_prompt)
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=tools,
         callbacks=[callback],
         verbose=True,
+        handle_parsing_errors=True,
+        max_iterations=3,
     )
 
     # Log user input
     tracer.log("user", "input", message="What's the weather in Tokyo and any AI news?")
 
     # Run agent
-    result = agent.run("What's the weather in Tokyo and are there any recent AI news?")
-    print(f"Agent result: {result}")
+    result = agent_executor.invoke(
+        {
+            "input": "What's the weather in Tokyo and are there any recent AI news?",
+            # Start with empty scratchpad string for first turn
+            "agent_scratchpad": "",
+        }
+    )
+    print(f"Agent result: {result.get('output', result)}")
 
     # Flush traces
     tracer.flush()
@@ -108,7 +140,7 @@ def example_langchain_custom_chain():
         print("Skipping custom chain example - not installed")
         return
 
-    from langchain.chains import SequentialChain
+    # Using sequential execution for clarity in this example
 
     # Create tracer and callback
     tracer = Tracer()
@@ -122,45 +154,51 @@ def example_langchain_custom_chain():
         input_variables=["topic"],
         template="Create an outline for a blog post about {topic}. List 3 main points.",
     )
-    outline_chain = LLMChain(
-        llm=llm, prompt=outline_prompt, output_key="outline", callbacks=[callback]
-    )
+    outline_chain = outline_prompt | llm | StrOutputParser()
 
     # Chain 2: Write introduction
     intro_prompt = PromptTemplate(
         input_variables=["topic", "outline"],
         template="Write an introduction for a blog post about {topic} based on this outline:\n{outline}",
     )
-    intro_chain = LLMChain(
-        llm=llm, prompt=intro_prompt, output_key="introduction", callbacks=[callback]
-    )
+    intro_chain = intro_prompt | llm | StrOutputParser()
 
     # Chain 3: Generate summary
     summary_prompt = PromptTemplate(
         input_variables=["outline", "introduction"],
         template="Create a 2-sentence summary based on:\nOutline: {outline}\nIntro: {introduction}",
     )
-    summary_chain = LLMChain(
-        llm=llm, prompt=summary_prompt, output_key="summary", callbacks=[callback]
-    )
+    summary_chain = summary_prompt | llm | StrOutputParser()
 
     # Combine chains
-    overall_chain = SequentialChain(
-        chains=[outline_chain, intro_chain, summary_chain],
-        input_variables=["topic"],
-        output_variables=["outline", "introduction", "summary"],
-        callbacks=[callback],
-    )
+    # Wire chains: first compute outline, then intro/summary in parallel
+    def make_intro_inputs(inputs):
+        return {"topic": inputs["topic"], "outline": inputs["outline"]}
+
+    def make_summary_inputs(inputs):
+        return {"outline": inputs["outline"], "introduction": inputs["introduction"]}
+
+    # Step 1
+    def step1(inputs):
+        outline = outline_chain.invoke({"topic": inputs["topic"]})
+        return {"topic": inputs["topic"], "outline": outline}
+
+    # Step 2: compute intro then summary
 
     # Log user request
     tracer.log("user", "input", message="Write about machine learning")
 
     # Run the chain
-    result = overall_chain({"topic": "machine learning"})
+    # Execute
+    step1_out = step1({"topic": "machine learning"})
+    intro_text = intro_chain.invoke(make_intro_inputs(step1_out))
+    summary_text = summary_chain.invoke(
+        {"outline": step1_out["outline"], "introduction": intro_text}
+    )
 
-    print("Outline:", result["outline"])
-    print("\nIntroduction:", result["introduction"])
-    print("\nSummary:", result["summary"])
+    print("Outline:", step1_out["outline"])
+    print("\nIntroduction:", intro_text)
+    print("\nSummary:", summary_text)
 
     # Flush traces
     tracer.flush()
@@ -173,7 +211,7 @@ if __name__ == "__main__":
 
     if not os.getenv("OPENAI_API_KEY"):
         print("Warning: OPENAI_API_KEY not set. Examples will fail.")
-        print("Set it with: export OPENAI_API_KEY='your-key-here'")
+        print("Set it as an environment variable before running.")
 
     print("=== Example 1: Simple Chain ===")
     example_langchain_simple_chain()
