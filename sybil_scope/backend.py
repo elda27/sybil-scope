@@ -38,7 +38,12 @@ class FileBackend(Backend):
     directory and generates informative filenames including timestamp and PID.
     """
 
-    def __init__(self, filepath: Path | None = None, name_format: str | None = None):
+    def __init__(
+        self,
+        filepath: Path | None = None,
+        name_format: str | None = None,
+        buffer_size: int | None = None,
+    ):
         """Initialize file backend.
 
         Args:
@@ -70,7 +75,8 @@ class FileBackend(Backend):
             parent.mkdir(parents=True, exist_ok=True)
 
         self._buffer: list[TraceEvent] = []
-        self._buffer_size = 10  # Flush every 10 events
+        # Flush every N events (default 10)
+        self._buffer_size = buffer_size or 10
 
     def save(self, event: TraceEvent):
         """Save a trace event to the buffer."""

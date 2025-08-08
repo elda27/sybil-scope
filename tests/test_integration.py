@@ -13,7 +13,6 @@ from sybil_scope import (
     InMemoryBackend,
     Tracer,
     TraceType,
-    set_global_tracer,
     trace_function,
     trace_tool,
 )
@@ -125,47 +124,41 @@ class TestEndToEndScenarios:
         """Test workflow with errors and recovery."""
         backend = InMemoryBackend()
         tracer = Tracer(backend=backend)
-        set_global_tracer(tracer)
 
-        try:
+        @trace_tool("database", tracer=tracer)
+        def query_db(query):
+            if "DROP" in query:
+                raise ValueError("Dangerous query detected")
+            return [{"id": 1, "name": "Test"}]
 
-            @trace_tool("database")
-            def query_db(query):
-                if "DROP" in query:
-                    raise ValueError("Dangerous query detected")
-                return [{"id": 1, "name": "Test"}]
+        @trace_function(tracer=tracer)
+        def safe_query_wrapper(query):
+            try:
+                return query_db(query)
+            except ValueError as e:
+                # Log error and use cached data
+                tracer.log(
+                    TraceType.AGENT,
+                    ActionType.PROCESS,
+                    label="Error Recovery",
+                    error=str(e),
+                    fallback="Using cached data",
+                )
+                return [{"id": 0, "name": "Cached"}]
 
-            @trace_function()
-            def safe_query_wrapper(query):
-                try:
-                    return query_db(query)
-                except ValueError as e:
-                    # Log error and use cached data
-                    tracer.log(
-                        TraceType.AGENT,
-                        ActionType.PROCESS,
-                        label="Error Recovery",
-                        error=str(e),
-                        fallback="Using cached data",
-                    )
-                    return [{"id": 0, "name": "Cached"}]
+        # Test safe query
+        result1 = safe_query_wrapper("SELECT * FROM users")
+        assert result1[0]["id"] == 1
 
-            # Test safe query
-            result1 = safe_query_wrapper("SELECT * FROM users")
-            assert result1[0]["id"] == 1
+        # Test dangerous query with recovery
+        result2 = safe_query_wrapper("DROP TABLE users")
+        assert result2[0]["id"] == 0
 
-            # Test dangerous query with recovery
-            result2 = safe_query_wrapper("DROP TABLE users")
-            assert result2[0]["id"] == 0
-
-            # Verify error was logged
-            events = backend.load()
-            error_events = [e for e in events if "error" in e.details]
-            assert len(error_events) > 0
-            assert "Dangerous query detected" in error_events[0].details["error"]
-
-        finally:
-            set_global_tracer(None)
+        # Verify error was logged
+        events = backend.load()
+        error_events = [e for e in events if "error" in e.details]
+        assert len(error_events) > 0
+        assert "Dangerous query detected" in error_events[0].details["error"]
 
     def test_parallel_operations(self):
         """Test tracing parallel operations."""

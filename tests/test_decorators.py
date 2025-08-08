@@ -9,8 +9,6 @@ from sybil_scope import (
     InMemoryBackend,
     Tracer,
     TraceType,
-    get_global_tracer,
-    set_global_tracer,
     trace_function,
     trace_llm,
     trace_tool,
@@ -18,15 +16,17 @@ from sybil_scope import (
 
 
 class TestGlobalTracer:
-    def test_set_and_get_global_tracer(self):
-        tracer = Tracer(backend=InMemoryBackend())
-        set_global_tracer(tracer)
+    def test_no_global_tracer_api(self):
+        # Library no longer exposes global tracer helpers
+        # This test ensures the explicit tracer path works.
+        backend = InMemoryBackend()
+        tracer = Tracer(backend=backend)
 
-        assert get_global_tracer() is tracer
+        @trace_function(tracer=tracer)
+        def f():
+            return 1
 
-        # Clear for other tests
-        set_global_tracer(None)
-        assert get_global_tracer() is None
+        assert f() == 1
 
 
 class TestTraceFunctionDecorator:
@@ -128,34 +128,19 @@ class TestTraceFunctionDecorator:
         assert "args" not in start_event.details
         assert "kwargs" not in start_event.details
 
-    def test_with_global_tracer(self):
-        backend = InMemoryBackend()
-        tracer = Tracer(backend=backend)
-        set_global_tracer(tracer)
+    def test_with_no_explicit_tracer(self):
+        # Without explicit tracer, function runs without tracing
+        @trace_function()  # No tracer param
+        def test_func():
+            return "no trace"
 
-        try:
-
-            @trace_function()  # No tracer param
-            def test_func():
-                return "global"
-
-            test_func()
-
-            events = backend.load()
-            assert len(events) > 0
-            assert events[0].details["function"] == "test_func"
-        finally:
-            set_global_tracer(None)
+        assert test_func() == "no trace"
 
     def test_no_tracer_configured(self):
-        # Ensure no global tracer
-        set_global_tracer(None)
-
         @trace_function()
         def test_func():
             return "no trace"
 
-        # Should work without tracing
         result = test_func()
         assert result == "no trace"
 
@@ -282,41 +267,33 @@ class TestDecoratorIntegration:
     def test_nested_decorated_functions(self):
         backend = InMemoryBackend()
         tracer = Tracer(backend=backend)
-        set_global_tracer(tracer)
 
-        try:
+        @trace_tool("weather", tracer=tracer)
+        def get_weather(city):
+            return f"Sunny in {city}"
 
-            @trace_tool("weather")
-            def get_weather(city):
-                return f"Sunny in {city}"
+        @trace_llm(model="gpt-4", tracer=tracer)
+        def generate_response(data):
+            return f"The weather is: {data}"
 
-            @trace_llm(model="gpt-4")
-            def generate_response(data):
-                return f"The weather is: {data}"
+        @trace_function(tracer=tracer)
+        def process_weather_request(city):
+            weather_data = get_weather(city)
+            response = generate_response(weather_data)
+            return response
 
-            @trace_function()
-            def process_weather_request(city):
-                weather_data = get_weather(city)
-                response = generate_response(weather_data)
-                return response
+        process_weather_request("Tokyo")
 
-            process_weather_request("Tokyo")
+        events = backend.load()
 
-            events = backend.load()
+        # Should have events for all three functions
+        function_names = [
+            e.details.get("function") for e in events if "function" in e.details
+        ]
+        assert "process_weather_request" in function_names
 
-            # Should have events for all three functions
-            function_names = [
-                e.details.get("function") for e in events if "function" in e.details
-            ]
-            assert "process_weather_request" in function_names
+        tool_names = [e.details.get("name") for e in events if "name" in e.details]
+        assert "weather" in tool_names
 
-            tool_names = [e.details.get("name") for e in events if "name" in e.details]
-            assert "weather" in tool_names
-
-            model_names = [
-                e.details.get("model") for e in events if "model" in e.details
-            ]
-            assert "gpt-4" in model_names
-
-        finally:
-            set_global_tracer(None)
+        model_names = [e.details.get("model") for e in events if "model" in e.details]
+        assert "gpt-4" in model_names

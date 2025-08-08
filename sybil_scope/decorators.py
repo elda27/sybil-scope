@@ -8,20 +8,6 @@ from typing import Any, Callable
 from .api import Tracer
 from .core import ActionType, TraceType
 
-# Global tracer instance
-_global_tracer: Tracer | None = None
-
-
-def set_global_tracer(tracer: Tracer):
-    """Set the global tracer instance."""
-    global _global_tracer
-    _global_tracer = tracer
-
-
-def get_global_tracer() -> Tracer | None:
-    """Get the global tracer instance."""
-    return _global_tracer
-
 
 def trace_function(
     trace_type: TraceType | str = TraceType.AGENT,
@@ -43,8 +29,8 @@ def trace_function(
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
-            # Get tracer
-            active_tracer = tracer or get_global_tracer()
+            # Get tracer (explicit only)
+            active_tracer = tracer
             if not active_tracer:
                 # No tracer configured, just execute function
                 return func(*args, **kwargs)
@@ -95,8 +81,8 @@ def trace_llm(model: str = "unknown", tracer: Tracer | None = None):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
-            # Get tracer
-            active_tracer = tracer or get_global_tracer()
+            # Get tracer (explicit only)
+            active_tracer = tracer
             if not active_tracer:
                 return func(*args, **kwargs)
 
@@ -168,8 +154,8 @@ def trace_tool(tool_name: str, tracer: Tracer | None = None):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
-            # Get tracer
-            active_tracer = tracer or get_global_tracer()
+            # Get tracer (explicit only)
+            active_tracer = tracer
             if not active_tracer:
                 return func(*args, **kwargs)
 
