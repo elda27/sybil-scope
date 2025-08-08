@@ -7,8 +7,6 @@ import tempfile
 import time
 from pathlib import Path
 
-import pytest
-
 from sybil_scope import (
     ActionType,
     FileBackend,
@@ -17,7 +15,6 @@ from sybil_scope import (
     TraceType,
     set_global_tracer,
     trace_function,
-    trace_llm,
     trace_tool,
 )
 
@@ -42,7 +39,7 @@ class TestEndToEndScenarios:
                 ActionType.START,
                 parent_id=user_id,
                 name="WeatherAgent",
-            ) as agent_ctx:
+            ):
                 # LLM planning
                 with tracer.trace(
                     TraceType.LLM,
@@ -251,7 +248,7 @@ class TestEndToEndScenarios:
                 return f"Level {depth}: {result}"
 
         # Create 3 levels of nesting
-        final_result = create_nested_agents(3)
+        create_nested_agents(3)
 
         # Verify structure
         events = backend.load()

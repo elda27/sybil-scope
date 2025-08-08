@@ -2,11 +2,8 @@
 Public API for the Sibyl Scope tracing library.
 """
 
-import json
-import uuid
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 
 from .backend import Backend, FileBackend
 from .core import ActionType, TraceContext, TraceEvent, TraceType

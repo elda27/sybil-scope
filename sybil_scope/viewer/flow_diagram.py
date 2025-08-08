@@ -9,7 +9,6 @@ import streamlit as st
 from sybil_scope.core import ActionType, TraceEvent, TraceType
 from sybil_scope.viewer.common import (
     EventStyleHelper,
-    HierarchyHelper,
     TextFormatter,
     TimeHelper,
 )

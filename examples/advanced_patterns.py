@@ -22,7 +22,7 @@ from sybil_scope import (
 class FilteredFileBackend(FileBackend):
     """Custom backend that filters certain event types."""
 
-    def __init__(self, filepath=None, excluded_types: list[TraceType] = None):
+    def __init__(self, filepath=None, excluded_types=None):
         super().__init__(filepath)
         self.excluded_types = excluded_types or []
 
@@ -217,9 +217,7 @@ def example_error_tracking():
         return "Success"
 
     # Start agent with error handling
-    with tracer.trace(
-        TraceType.AGENT, ActionType.START, name="ErrorHandlingAgent"
-    ) as agent_ctx:
+    with tracer.trace(TraceType.AGENT, ActionType.START, name="ErrorHandlingAgent"):
         # Try operation that succeeds
         try:
             with tracer.trace(
@@ -311,7 +309,7 @@ def example_multimodal_tracing():
     # Vision model analysis
     with tracer.trace(
         TraceType.AGENT, ActionType.START, parent_id=user_id, name="VisionAgent"
-    ) as agent_ctx:
+    ):
         # Image preprocessing
         tracer.log(
             TraceType.AGENT,

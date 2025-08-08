@@ -1,19 +1,23 @@
 """
 Sibyl Scope - Comprehensive tracing and observability toolkit for Python AI/LLM applications.
 """
+
 from .api import Tracer
 from .core import TraceType, ActionType, TraceEvent
 from .backend import Backend, FileBackend, InMemoryBackend
 from .decorators import (
-    trace_function, trace_llm, trace_tool,
-    set_global_tracer, get_global_tracer
+    trace_function,
+    trace_llm,
+    trace_tool,
+    set_global_tracer,
+    get_global_tracer,
 )
 
 __version__ = "0.1.0"
 __all__ = [
     "Tracer",
     "TraceType",
-    "ActionType", 
+    "ActionType",
     "TraceEvent",
     "Backend",
     "FileBackend",

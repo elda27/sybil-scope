@@ -2,7 +2,6 @@
 LangChain integration for Sibyl Scope.
 """
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
