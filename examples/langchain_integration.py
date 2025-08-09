@@ -4,34 +4,23 @@ Example of using Sibyl Scope with LangChain (v0.3+ APIs).
 
 import os
 
-from sybil_scope import Tracer
+# Modern LC imports
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+
+import sybil_scope as ss
 from sybil_scope.integrations.langchain import SibylScopeCallbackHandler
 
 # Check if langchain is available
-try:
-    # Modern LC imports
-    from langchain.agents import AgentExecutor, create_react_agent
-    from langchain_core.output_parsers import StrOutputParser
-    from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
-    from langchain_core.tools import tool
-    from langchain_openai import ChatOpenAI
-
-    LANGCHAIN_AVAILABLE = True
-except Exception:
-    LANGCHAIN_AVAILABLE = False
-    print(
-        "LangChain v0.3+ not installed. Install with: pip install langchain langchain-openai"
-    )
 
 
 def example_langchain_simple_chain():
     """Demonstrate tracing a simple LangChain chain."""
-    if not LANGCHAIN_AVAILABLE:
-        print("Skipping LangChain example - not installed")
-        return
-
     # Create tracer and callback
-    tracer = Tracer()  # default FileBackend now writes to traces/ folder
+    tracer = ss.Tracer()  # default FileBackend now writes to traces/ folder
     callback = SibylScopeCallbackHandler(tracer)
 
     # Create a simple chain (Runnable)
@@ -82,12 +71,9 @@ def build_react_prompt() -> ChatPromptTemplate:
 
 def example_langchain_agent():
     """Demonstrate tracing a LangChain agent with tools."""
-    if not LANGCHAIN_AVAILABLE:
-        print("Skipping LangChain agent example - not installed")
-        return
 
     # Create tracer and callback
-    tracer = Tracer()
+    tracer = ss.Tracer()
     callback = SibylScopeCallbackHandler(tracer)
 
     # Create custom tools
@@ -136,14 +122,10 @@ def example_langchain_agent():
 
 def example_langchain_custom_chain():
     """Demonstrate tracing a custom multi-step chain."""
-    if not LANGCHAIN_AVAILABLE:
-        print("Skipping custom chain example - not installed")
-        return
-
     # Using sequential execution for clarity in this example
 
     # Create tracer and callback
-    tracer = Tracer()
+    tracer = ss.Tracer()
     callback = SibylScopeCallbackHandler(tracer)
 
     # Create LLM

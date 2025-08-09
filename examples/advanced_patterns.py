@@ -7,19 +7,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from sybil_scope import (
-    ActionType,
-    FileBackend,
-    InMemoryBackend,
-    Tracer,
-    TraceType,
-    set_global_tracer,
-    trace_function,
-)
+import sybil_scope as ss
 
 
 # Example 1: Custom backend
-class FilteredFileBackend(FileBackend):
+class FilteredFileBackend(ss.FileBackend):
     """Custom backend that filters certain event types."""
 
     def __init__(self, filepath=None, excluded_types=None):
@@ -36,18 +28,18 @@ def example_custom_backend():
     """Demonstrate using a custom backend."""
     # Create backend that excludes LLM events
     backend = FilteredFileBackend(
-        filepath="filtered_traces.jsonl", excluded_types=[TraceType.LLM]
+        filepath="filtered_traces.jsonl", excluded_types=[ss.TraceType.LLM]
     )
-    tracer = Tracer(backend=backend)
+    tracer = ss.Tracer(backend=backend)
 
     # This will be saved
-    tracer.log(TraceType.USER, ActionType.INPUT, message="Hello")
+    tracer.log(ss.TraceType.USER, ss.ActionType.INPUT, message="Hello")
 
     # This will be filtered out
-    tracer.log(TraceType.LLM, ActionType.REQUEST, prompt="Generate response")
+    tracer.log(ss.TraceType.LLM, ss.ActionType.REQUEST, prompt="Generate response")
 
     # This will be saved
-    tracer.log(TraceType.AGENT, ActionType.PROCESS, label="Processing")
+    tracer.log(ss.TraceType.AGENT, ss.ActionType.PROCESS, label="Processing")
 
     tracer.flush()
     print(f"Filtered traces saved to: {backend.filepath}")
@@ -68,17 +60,20 @@ async def async_tool_call(tool_name: str, args: dict[str, Any]) -> Any:
 
 async def example_async_tracing():
     """Demonstrate tracing async operations."""
-    tracer = Tracer()
+    tracer = ss.Tracer()
 
     # Start async agent
     agent_id = tracer.log(
-        TraceType.AGENT, ActionType.START, name="AsyncAgent", args={"mode": "parallel"}
+        ss.TraceType.AGENT,
+        ss.ActionType.START,
+        name="AsyncAgent",
+        args={"mode": "parallel"},
     )
 
     # Run multiple async operations in parallel
     async with tracer.trace(
-        TraceType.AGENT,
-        ActionType.PROCESS,
+        ss.TraceType.AGENT,
+        ss.ActionType.PROCESS,
         parent_id=agent_id,
         label="Parallel Operations",
     ):
@@ -90,14 +85,17 @@ async def example_async_tracing():
 
             async def llm_task(idx):
                 llm_id = tracer.log(
-                    TraceType.LLM,
-                    ActionType.REQUEST,
+                    ss.TraceType.LLM,
+                    ss.ActionType.REQUEST,
                     model="gpt-4",
                     args={"prompt": f"Query {idx}"},
                 )
                 result = await async_llm_call(f"Query {idx}")
                 tracer.log(
-                    TraceType.LLM, ActionType.RESPOND, parent_id=llm_id, response=result
+                    ss.TraceType.LLM,
+                    ss.ActionType.RESPOND,
+                    parent_id=llm_id,
+                    response=result,
                 )
                 return result
 
@@ -108,14 +106,17 @@ async def example_async_tracing():
 
             async def tool_task(tool_name):
                 tool_id = tracer.log(
-                    TraceType.TOOL,
-                    ActionType.CALL,
+                    ss.TraceType.TOOL,
+                    ss.ActionType.CALL,
                     name=tool_name,
                     args={"query": "test"},
                 )
                 result = await async_tool_call(tool_name, {"query": "test"})
                 tracer.log(
-                    TraceType.TOOL, ActionType.RESPOND, parent_id=tool_id, result=result
+                    ss.TraceType.TOOL,
+                    ss.ActionType.RESPOND,
+                    parent_id=tool_id,
+                    result=result,
                 )
                 return result
 
@@ -126,14 +127,14 @@ async def example_async_tracing():
 
         # Log results
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Aggregated Results",
             results=results,
         )
 
     # End agent
-    tracer.log(TraceType.AGENT, ActionType.END, parent_id=agent_id)
+    tracer.log(ss.TraceType.AGENT, ss.ActionType.END, parent_id=agent_id)
 
     tracer.flush()
     print(f"Async traces saved to: {tracer.backend.filepath}")
@@ -142,23 +143,22 @@ async def example_async_tracing():
 # Example 3: Performance monitoring
 def example_performance_monitoring():
     """Demonstrate using traces for performance monitoring."""
-    tracer = Tracer(backend=InMemoryBackend())
-    set_global_tracer(tracer)
+    tracer = ss.Tracer(backend=ss.InMemoryBackend())
 
-    @trace_function()
+    @ss.trace_function(tracer=tracer)
     def slow_operation(duration: float):
         """Simulate slow operation."""
         time.sleep(duration)
         return f"Completed in {duration}s"
 
-    @trace_function()
+    @ss.trace_function(tracer=tracer)
     def fast_operation():
         """Simulate fast operation."""
         time.sleep(0.01)
         return "Done quickly"
 
     # Run operations
-    with tracer.trace(TraceType.AGENT, ActionType.START, name="PerformanceTest"):
+    with tracer.trace(ss.TraceType.AGENT, ss.ActionType.START, name="PerformanceTest"):
         slow_operation(0.2)
         fast_operation()
         slow_operation(0.3)
@@ -182,12 +182,16 @@ def example_performance_monitoring():
     # Calculate durations for paired events
     event_pairs = {}
     for event in events:
-        if event.action in [ActionType.START, ActionType.REQUEST, ActionType.CALL]:
+        if event.action in [
+            ss.ActionType.START,
+            ss.ActionType.REQUEST,
+            ss.ActionType.CALL,
+        ]:
             event_pairs[event.id] = {"start": event, "end": None}
 
     for event in events:
         if (
-            event.action in [ActionType.END, ActionType.RESPOND]
+            event.action in [ss.ActionType.END, ss.ActionType.RESPOND]
             and event.parent_id in event_pairs
         ):
             event_pairs[event.parent_id]["end"] = event
@@ -208,7 +212,7 @@ def example_performance_monitoring():
 # Example 4: Error tracking and recovery
 def example_error_tracking():
     """Demonstrate error tracking and recovery patterns."""
-    tracer = Tracer()
+    tracer = ss.Tracer()
 
     def risky_operation(should_fail: bool = False):
         """Operation that might fail."""
@@ -217,24 +221,26 @@ def example_error_tracking():
         return "Success"
 
     # Start agent with error handling
-    with tracer.trace(TraceType.AGENT, ActionType.START, name="ErrorHandlingAgent"):
+    with tracer.trace(
+        ss.TraceType.AGENT, ss.ActionType.START, name="ErrorHandlingAgent"
+    ):
         # Try operation that succeeds
         try:
             with tracer.trace(
-                TraceType.AGENT, ActionType.PROCESS, label="Attempt 1"
+                ss.TraceType.AGENT, ss.ActionType.PROCESS, label="Attempt 1"
             ) as attempt_ctx:
                 result = risky_operation(should_fail=False)
                 tracer.log(
-                    TraceType.AGENT,
-                    ActionType.PROCESS,
+                    ss.TraceType.AGENT,
+                    ss.ActionType.PROCESS,
                     parent_id=attempt_ctx.id,
                     label="Success",
                     result=result,
                 )
         except Exception as e:
             tracer.log(
-                TraceType.AGENT,
-                ActionType.PROCESS,
+                ss.TraceType.AGENT,
+                ss.ActionType.PROCESS,
                 parent_id=attempt_ctx.id,
                 label="Error",
                 error=str(e),
@@ -244,20 +250,20 @@ def example_error_tracking():
         # Try operation that fails with recovery
         try:
             with tracer.trace(
-                TraceType.AGENT, ActionType.PROCESS, label="Attempt 2"
+                ss.TraceType.AGENT, ss.ActionType.PROCESS, label="Attempt 2"
             ) as attempt_ctx:
                 result = risky_operation(should_fail=True)
                 tracer.log(
-                    TraceType.AGENT,
-                    ActionType.PROCESS,
+                    ss.TraceType.AGENT,
+                    ss.ActionType.PROCESS,
                     parent_id=attempt_ctx.id,
                     label="Success",
                     result=result,
                 )
         except Exception as e:
             tracer.log(
-                TraceType.AGENT,
-                ActionType.PROCESS,
+                ss.TraceType.AGENT,
+                ss.ActionType.PROCESS,
                 parent_id=attempt_ctx.id,
                 label="Error Caught",
                 error=str(e),
@@ -266,15 +272,15 @@ def example_error_tracking():
 
             # Recovery strategy
             with tracer.trace(
-                TraceType.AGENT,
-                ActionType.PROCESS,
+                ss.TraceType.AGENT,
+                ss.ActionType.PROCESS,
                 parent_id=attempt_ctx.id,
                 label="Recovery Strategy",
             ):
                 # Try alternative approach
                 tracer.log(
-                    TraceType.AGENT,
-                    ActionType.PROCESS,
+                    ss.TraceType.AGENT,
+                    ss.ActionType.PROCESS,
                     label="Using Fallback",
                     strategy="default_value",
                 )
@@ -282,8 +288,8 @@ def example_error_tracking():
 
         # Log final status
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Final Result",
             result=result,
             had_errors=True,
@@ -296,24 +302,24 @@ def example_error_tracking():
 # Example 5: Multi-modal tracing (text, image, audio references)
 def example_multimodal_tracing():
     """Demonstrate tracing multi-modal AI operations."""
-    tracer = Tracer()
+    tracer = ss.Tracer()
 
     # User uploads image
     user_id = tracer.log(
-        TraceType.USER,
-        ActionType.INPUT,
+        ss.TraceType.USER,
+        ss.ActionType.INPUT,
         message="Analyze this image",
         attachments=[{"type": "image", "path": "/tmp/user_image.jpg"}],
     )
 
     # Vision model analysis
     with tracer.trace(
-        TraceType.AGENT, ActionType.START, parent_id=user_id, name="VisionAgent"
+        ss.TraceType.AGENT, ss.ActionType.START, parent_id=user_id, name="VisionAgent"
     ):
         # Image preprocessing
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Preprocessing",
             operations=["resize", "normalize"],
             image_size=(1024, 1024),
@@ -321,15 +327,15 @@ def example_multimodal_tracing():
 
         # Vision model call
         with tracer.trace(
-            TraceType.LLM,
-            ActionType.REQUEST,
+            ss.TraceType.LLM,
+            ss.ActionType.REQUEST,
             model="gpt-4-vision",
             args={"image_path": "/tmp/user_image.jpg", "prompt": "Describe this image"},
         ) as vision_ctx:
             time.sleep(0.2)  # Simulate processing
             tracer.log(
-                TraceType.LLM,
-                ActionType.RESPOND,
+                ss.TraceType.LLM,
+                ss.ActionType.RESPOND,
                 parent_id=vision_ctx.id,
                 model="gpt-4-vision",
                 response="The image shows a sunset over mountains",
@@ -338,15 +344,15 @@ def example_multimodal_tracing():
 
         # Generate audio description
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Generate Audio",
             text="The image shows a sunset over mountains",
         )
 
         with tracer.trace(
-            TraceType.TOOL,
-            ActionType.CALL,
+            ss.TraceType.TOOL,
+            ss.ActionType.CALL,
             name="text_to_speech",
             args={
                 "text": "The image shows a sunset over mountains",
@@ -355,8 +361,8 @@ def example_multimodal_tracing():
         ) as tts_ctx:
             time.sleep(0.1)
             tracer.log(
-                TraceType.TOOL,
-                ActionType.RESPOND,
+                ss.TraceType.TOOL,
+                ss.ActionType.RESPOND,
                 parent_id=tts_ctx.id,
                 name="text_to_speech",
                 result={"audio_path": "/tmp/description.mp3", "duration": 3.5},
@@ -364,8 +370,8 @@ def example_multimodal_tracing():
 
         # Final multi-modal response
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Multi-modal Response",
             response={
                 "text": "The image shows a sunset over mountains",

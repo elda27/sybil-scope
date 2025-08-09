@@ -4,52 +4,44 @@ Basic usage example of Sibyl Scope tracing library.
 
 import time
 
-from sybil_scope import (
-    ActionType,
-    Tracer,
-    TraceType,
-    set_global_tracer,
-    trace_function,
-    trace_llm,
-    trace_tool,
-)
+import sybil_scope as ss
 
 
 # Example 1: Basic tracing with context manager
 def example_basic_tracing():
     """Demonstrate basic tracing with context manager."""
-    tracer = Tracer()
+    tracer = ss.Tracer()
 
     # Trace a user input
     user_id = tracer.log(
-        TraceType.USER, ActionType.INPUT, message="What's the weather in Tokyo?"
+        ss.TraceType.USER, ss.ActionType.INPUT, message="What's the weather in Tokyo?"
     )
 
     # Trace agent processing
     with tracer.trace(
-        TraceType.AGENT,
-        ActionType.START,
+        ss.TraceType.AGENT,
+        ss.ActionType.START,
         parent_id=user_id,
         args={"task": "Answer weather query"},
     ):
         # Trace planning step
         with tracer.trace(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Planning",
             args={"user_query": "What's the weather in Tokyo?"},
         ):
             # Simulate LLM call for planning
             with tracer.trace(
-                TraceType.LLM,
-                ActionType.REQUEST,
+                ss.TraceType.LLM,
+                ss.ActionType.REQUEST,
                 model="gpt-4",
                 args={"prompt": "Plan how to answer weather query", "temperature": 0.2},
             ) as llm_ctx:
                 time.sleep(0.1)  # Simulate API call
                 tracer.log(
-                    TraceType.LLM,
-                    ActionType.RESPOND,
+                    ss.TraceType.LLM,
+                    ss.ActionType.RESPOND,
                     parent_id=llm_ctx.id,
                     model="gpt-4",
                     response="Use weather tool to get Tokyo weather",
@@ -57,20 +49,23 @@ def example_basic_tracing():
 
         # Trace tool selection
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Tool Selection",
             response="weather",
         )
 
         # Trace tool call
         with tracer.trace(
-            TraceType.TOOL, ActionType.CALL, name="weather", args={"location": "Tokyo"}
+            ss.TraceType.TOOL,
+            ss.ActionType.CALL,
+            name="weather",
+            args={"location": "Tokyo"},
         ) as tool_ctx:
             time.sleep(0.1)  # Simulate API call
             tracer.log(
-                TraceType.TOOL,
-                ActionType.RESPOND,
+                ss.TraceType.TOOL,
+                ss.ActionType.RESPOND,
                 parent_id=tool_ctx.id,
                 name="weather",
                 result={"temperature": "22°C", "condition": "sunny", "humidity": "60%"},
@@ -78,8 +73,8 @@ def example_basic_tracing():
 
         # Trace response generation
         with tracer.trace(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Generate Response",
             args={
                 "tool_result": {
@@ -91,15 +86,15 @@ def example_basic_tracing():
         ):
             # Another LLM call for response
             with tracer.trace(
-                TraceType.LLM,
-                ActionType.REQUEST,
+                ss.TraceType.LLM,
+                ss.ActionType.REQUEST,
                 model="gpt-4",
                 args={"prompt": "Format weather data for user", "max_tokens": 50},
             ) as llm_ctx:
                 time.sleep(0.1)
                 tracer.log(
-                    TraceType.LLM,
-                    ActionType.RESPOND,
+                    ss.TraceType.LLM,
+                    ss.ActionType.RESPOND,
                     parent_id=llm_ctx.id,
                     model="gpt-4",
                     response="Currently in Tokyo: 22°C, sunny, 60% humidity",
@@ -107,8 +102,8 @@ def example_basic_tracing():
 
         # Log final answer
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Final Answer",
             response="Currently in Tokyo: 22°C, sunny, 60% humidity",
         )
@@ -121,21 +116,22 @@ def example_basic_tracing():
 # Example 2: Using decorators
 def example_decorator_usage():
     """Demonstrate tracing with decorators."""
-    tracer = Tracer()
-    set_global_tracer(tracer)
+    tracer = ss.Tracer()
 
-    @trace_tool("calculator")
+    @ss.trace_tool("calculator", tracer=tracer)
     def calculate(expression: str) -> float:
         """Simple calculator tool."""
         return eval(expression)  # Note: eval is unsafe in production!
 
-    @trace_llm(model="gpt-3.5-turbo")
+    @ss.trace_llm(model="gpt-3.5-turbo", tracer=tracer)
     def call_llm(prompt: str, temperature: float = 0.7) -> str:
         """Simulate LLM call."""
         time.sleep(0.1)
         return f"Response to: {prompt}"
 
-    @trace_function(trace_type=TraceType.AGENT, action=ActionType.PROCESS)
+    @ss.trace_function(
+        trace_type=ss.TraceType.AGENT, action=ss.ActionType.PROCESS, tracer=tracer
+    )
     def process_math_query(query: str) -> str:
         """Process a math query."""
         # Extract math expression (simplified)
@@ -158,7 +154,7 @@ def example_decorator_usage():
         return response
 
     # Log user input
-    tracer.log(TraceType.USER, ActionType.INPUT, message="What is 10 plus 25?")
+    tracer.log(ss.TraceType.USER, ss.ActionType.INPUT, message="What is 10 plus 25?")
 
     # Process query
     result = process_math_query("What is 10 plus 25?")
@@ -171,46 +167,48 @@ def example_decorator_usage():
 # Example 3: Nested agents
 def example_nested_agents():
     """Demonstrate nested agent tracing."""
-    tracer = Tracer()
+    tracer = ss.Tracer()
 
     # User asks for news summary
     user_id = tracer.log(
-        TraceType.USER, ActionType.INPUT, message="Summarize AI news from last week"
+        ss.TraceType.USER,
+        ss.ActionType.INPUT,
+        message="Summarize AI news from last week",
     )
 
     # Main agent starts
     with tracer.trace(
-        TraceType.AGENT,
-        ActionType.START,
+        ss.TraceType.AGENT,
+        ss.ActionType.START,
         parent_id=user_id,
         args={"task": "Summarize AI news"},
     ):
         # Call search agent
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Calling SearchAgent",
             args={"query": "AI news last week"},
         )
 
         # Search agent starts
         with tracer.trace(
-            TraceType.AGENT,
-            ActionType.START,
+            ss.TraceType.AGENT,
+            ss.ActionType.START,
             name="SearchAgent",
             args={"query": "AI news last week"},
         ):
             # Search tool call
             with tracer.trace(
-                TraceType.TOOL,
-                ActionType.CALL,
+                ss.TraceType.TOOL,
+                ss.ActionType.CALL,
                 name="search",
                 args={"query": "AI news last week"},
             ) as tool_ctx:
                 time.sleep(0.1)
                 tracer.log(
-                    TraceType.TOOL,
-                    ActionType.RESPOND,
+                    ss.TraceType.TOOL,
+                    ss.ActionType.RESPOND,
                     parent_id=tool_ctx.id,
                     name="search",
                     result=[
@@ -221,8 +219,8 @@ def example_nested_agents():
 
             # Summarize articles
             tracer.log(
-                TraceType.AGENT,
-                ActionType.PROCESS,
+                ss.TraceType.AGENT,
+                ss.ActionType.PROCESS,
                 label="Summarizing articles",
                 args={
                     "articles": [
@@ -234,15 +232,15 @@ def example_nested_agents():
 
             # LLM call for summary
             with tracer.trace(
-                TraceType.LLM,
-                ActionType.REQUEST,
+                ss.TraceType.LLM,
+                ss.ActionType.REQUEST,
                 model="gpt-4",
                 args={"prompt": "Summarize these articles"},
             ) as llm_ctx:
                 time.sleep(0.1)
                 tracer.log(
-                    TraceType.LLM,
-                    ActionType.RESPOND,
+                    ss.TraceType.LLM,
+                    ss.ActionType.RESPOND,
                     parent_id=llm_ctx.id,
                     model="gpt-4",
                     response="Recent AI news covers LLM breakthroughs and ethics debates",
@@ -250,16 +248,16 @@ def example_nested_agents():
 
             # Return summary
             tracer.log(
-                TraceType.AGENT,
-                ActionType.PROCESS,
+                ss.TraceType.AGENT,
+                ss.ActionType.PROCESS,
                 label="Return summary",
                 response="Recent AI news covers LLM breakthroughs and ethics debates",
             )
 
         # Main agent integrates results
         tracer.log(
-            TraceType.AGENT,
-            ActionType.PROCESS,
+            ss.TraceType.AGENT,
+            ss.ActionType.PROCESS,
             label="Integrate SearchAgent results",
             response="Recent AI news covers LLM breakthroughs and ethics debates",
         )
