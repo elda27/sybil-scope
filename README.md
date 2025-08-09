@@ -1,6 +1,6 @@
 # Sibyl Scope
 
-A comprehensive tracing and observability toolkit for Python AI/LLM applications, designed to provide powerful tracing capabilities with minimal overhead for production use.
+A comprehensive tracing and observing behavior for AI Agent/LLM applications, designed to provide powerful tracing capabilities.
 
 ## Features
 
@@ -10,7 +10,6 @@ A comprehensive tracing and observability toolkit for Python AI/LLM applications
 - **Flexible backends**: File-based (JSONL) and in-memory storage options
 - **Framework integrations**: Built-in support for LangChain
 - **Low overhead**: Designed for production use with buffered writes
-- **Type-safe**: Full type hints and Pydantic models
 
 ## Installation
 
