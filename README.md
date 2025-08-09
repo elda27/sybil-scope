@@ -5,11 +5,11 @@ A comprehensive tracing and observing behavior for AI Agent/LLM applications, de
 ## Features
 
 - **Easy-to-use API**: Simple context managers and decorators for tracing
-- **Multiple trace types**: Support for User, Agent, LLM, and Tool traces
-- **Hierarchical tracing**: Parent-child relationships between trace events
+- **Offline capability**: All features available without an internet connection
 - **Flexible backends**: File-based (JSONL) and in-memory storage options
+  - TODO: Kafka, Redis, RDB supports
 - **Framework integrations**: Built-in support for LangChain
-- **Low overhead**: Designed for production use with buffered writes
+- **Visualization**: Tools for visualizing trace data
 
 ## Installation
 
