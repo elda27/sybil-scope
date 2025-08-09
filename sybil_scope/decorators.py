@@ -3,10 +3,10 @@ Decorators for easy tracing of functions and methods.
 """
 
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
-from .api import Tracer
-from .core import ActionType, TraceType
+from sybil_scope.api import Tracer
+from sybil_scope.core import ActionType, TraceType
 
 
 def trace_function(
@@ -36,13 +36,15 @@ def trace_function(
                 return func(*args, **kwargs)
 
             # Prepare details
-            details = {"function": func.__name__}
+            details: dict[str, Any] = {"function": func.__name__}
             if capture_args:
                 details["args"] = args
                 details["kwargs"] = kwargs
 
             # Execute with tracing
-            with active_tracer.trace(trace_type, action, **details) as context:
+            with active_tracer.trace(
+                trace_type=trace_type, action=action, **details
+            ) as context:
                 try:
                     result = func(*args, **kwargs)
                     if capture_result:
@@ -94,7 +96,7 @@ def trace_llm(model: str = "unknown", tracer: Tracer | None = None):
                 prompt = kwargs["prompt"]
 
             # Prepare details
-            details = {
+            details: dict[str, Any] = {
                 "model": model,
                 "function": func.__name__,
                 "args": {"prompt": prompt} if prompt else {},
@@ -109,11 +111,12 @@ def trace_llm(model: str = "unknown", tracer: Tracer | None = None):
                 "presence_penalty",
             ]:
                 if key in kwargs:
-                    details["args"][key] = kwargs[key]
+                    args_dict = cast(dict[str, Any], details.setdefault("args", {}))
+                    args_dict[key] = kwargs[key]
 
             # Execute with tracing
             with active_tracer.trace(
-                TraceType.LLM, ActionType.REQUEST, **details
+                trace_type=TraceType.LLM, action=ActionType.REQUEST, **details
             ) as context:
                 try:
                     response = func(*args, **kwargs)
@@ -160,14 +163,14 @@ def trace_tool(tool_name: str, tracer: Tracer | None = None):
                 return func(*args, **kwargs)
 
             # Prepare details
-            details = {
+            details: dict[str, Any] = {
                 "name": tool_name,
                 "args": dict(zip(func.__code__.co_varnames, args)) if args else kwargs,
             }
 
             # Execute with tracing
             with active_tracer.trace(
-                TraceType.TOOL, ActionType.CALL, **details
+                trace_type=TraceType.TOOL, action=ActionType.CALL, **details
             ) as context:
                 try:
                     result = func(*args, **kwargs)

@@ -24,8 +24,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterator
 
-from .api import Tracer
-from .backend import Backend, FileBackend, InMemoryBackend
+from sybil_scope.backend import Backend, FileBackend, InMemoryBackend
 
 
 class ConfigKey(str, Enum):

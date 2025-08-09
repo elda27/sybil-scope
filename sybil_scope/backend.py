@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
-from .core import TraceEvent
+from sybil_scope.core import TraceEvent
 
 
 class Backend(ABC):

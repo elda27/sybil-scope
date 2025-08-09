@@ -8,19 +8,6 @@ from pathlib import Path
 import pytest
 
 from sybil_scope.core import ActionType, TraceEvent, TraceType
-
-
-def _has_viewer_dependencies() -> bool:
-    """Check if viewer dependencies are available."""
-    try:
-        import pandas  # noqa: F401
-        import streamlit  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
 from sybil_scope.viewer.common import (
     DEFAULT_COLOR_SCHEME,
     DEFAULT_ICON_SCHEME,
@@ -33,6 +20,17 @@ from sybil_scope.viewer.common import (
     TimeHelper,
     TreeStructureBuilder,
 )
+
+
+def _has_viewer_dependencies() -> bool:
+    """Check if viewer dependencies are available."""
+    try:
+        import pandas  # noqa: F401
+        import streamlit  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
 
 
 class TestEventPairHelper:

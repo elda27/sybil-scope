@@ -2,7 +2,7 @@
 Visualization components for Sibyl Scope.
 """
 
-from .common import (
+from sybil_scope.viewer.common import (
     VIZ_OPTIONS,
     EventPairHelper,
     EventStyleHelper,

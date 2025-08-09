@@ -3,10 +3,9 @@ Sibyl Scope - Comprehensive tracing and observability toolkit for Python AI/LLM 
 """
 
 from sybil_scope._version import __version__  # noqa
-
-from .api import Tracer
-from .backend import Backend, FileBackend, InMemoryBackend
-from .config import (
+from sybil_scope.api import Tracer
+from sybil_scope.backend import Backend, FileBackend, InMemoryBackend
+from sybil_scope.config import (
     ConfigKey,
     configure_backend,
     get_option,
@@ -14,8 +13,8 @@ from .config import (
     reset_option,
     set_option,
 )
-from .core import ActionType, TraceEvent, TraceType
-from .decorators import (
+from sybil_scope.core import ActionType, TraceEvent, TraceType
+from sybil_scope.decorators import (
     trace_function,
     trace_llm,
     trace_tool,
@@ -45,4 +44,4 @@ try:
     from sybil_scope.viewer import app as viewer_app
 except ImportError:
     # Viewer dependencies not installed
-    viewer_app = None
+    viewer_app = None  # type:ignore

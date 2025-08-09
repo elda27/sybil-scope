@@ -6,9 +6,8 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from sybil_scope.config import configure_backend
-
-from .backend import Backend
-from .core import ActionType, TraceContext, TraceEvent, TraceType
+from sybil_scope.backend import Backend
+from sybil_scope.core import ActionType, TraceContext, TraceEvent, TraceType
 
 
 class Tracer:
