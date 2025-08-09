@@ -43,28 +43,48 @@ class FileBackend(Backend):
         filepath: Path | None = None,
         name_format: str | None = None,
         buffer_size: int | None = None,
+        prefix: str | None = None,
     ):
         """Initialize file backend.
 
         Args:
             filepath: Path to JSONL file. If not provided, defaults to
                 'traces/traces_{YYYYMMDD}_{HHMMSS}_{PID}.jsonl'.
-            name_format: Format of the trace file (e.g., "jsonl", "csv"). If not provided, "traces_{timestamp}.{extension}"
-                - {timestamp}: The timestamp when the trace was created
-                - {extension}: The file extension (e.g., "jsonl", "csv")
-                - {pid}: The process ID (PID) of the Python process
-                - {random}: A random string (for uniqueness)
+            name_format: Filename pattern. Defaults to "traces_{timestamp}.{extension}".
+                Available tokens:
+                - {timestamp}: Creation timestamp
+                - {extension}: File extension (e.g., "jsonl")
+                - {pid}: Current process ID
+                - {random}: Random hex for uniqueness
+                - {prefix}: Optional user-defined prefix (sanitized for filenames)
+            buffer_size: Number of events to buffer before flush (default 10)
+            prefix: Optional string used in filename generation. When provided and
+                filepath is not set, the default pattern becomes
+                "{prefix}_traces_{timestamp}.{extension}".
         """
         if filepath is None:
             if name_format is None:
-                name_format = "traces_{timestamp}.{extension}"
+                # If a prefix is provided, incorporate it in the default pattern
+                name_format = (
+                    "{prefix}_traces_{timestamp}.{extension}"
+                    if prefix
+                    else "traces_{timestamp}.{extension}"
+                )
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             default_dir = Path("traces")
+            safe_prefix = None
+            if prefix:
+                # Sanitize prefix for filenames: keep alnum, dash, underscore
+                safe_prefix = "".join(
+                    ch if (ch.isalnum() or ch in ("-", "_")) else "-"
+                    for ch in str(prefix)
+                )
             filepath = default_dir / name_format.format(
                 timestamp=timestamp,
                 extension="jsonl",
                 pid=os.getpid(),
                 random=uuid.uuid4().hex,
+                prefix=safe_prefix or "",
             )
 
         self.filepath = Path(filepath)

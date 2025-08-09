@@ -6,7 +6,7 @@ from .api import Tracer
 from .backend import Backend, FileBackend, InMemoryBackend
 from .config import (
     ConfigKey,
-    configure_tracer,
+    configure_backend,
     get_option,
     option_context,
     reset_option,
@@ -33,7 +33,7 @@ __all__ = [
     "get_option",
     "reset_option",
     "option_context",
-    "configure_tracer",
+    "configure_backend",
     "trace_function",
     "trace_llm",
     "trace_tool",

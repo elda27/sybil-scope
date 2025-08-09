@@ -14,13 +14,11 @@ from langchain_openai import ChatOpenAI
 import sybil_scope as ss
 from sybil_scope.integrations.langchain import SibylScopeCallbackHandler
 
-# Check if langchain is available
-
 
 def example_langchain_simple_chain():
     """Demonstrate tracing a simple LangChain chain."""
     # Create tracer and callback
-    tracer = ss.Tracer()  # default FileBackend now writes to traces/ folder
+    tracer = ss.Tracer()  # default FileBackend writes to traces/
     callback = SibylScopeCallbackHandler(tracer)
 
     # Create a simple chain (Runnable)
@@ -196,12 +194,15 @@ if __name__ == "__main__":
         print("Set it as an environment variable before running.")
 
     print("=== Example 1: Simple Chain ===")
-    example_langchain_simple_chain()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "lc_simple")):
+        example_langchain_simple_chain()
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 2: Agent with Tools ===")
-    example_langchain_agent()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "lc_agent")):
+        example_langchain_agent()
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 3: Custom Multi-Step Chain ===")
-    example_langchain_custom_chain()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "lc_custom")):
+        example_langchain_custom_chain()

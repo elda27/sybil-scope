@@ -30,6 +30,7 @@ def example_custom_backend():
     backend = FilteredFileBackend(
         filepath="filtered_traces.jsonl", excluded_types=[ss.TraceType.LLM]
     )
+    # Use the custom backend directly for this example
     tracer = ss.Tracer(backend=backend)
 
     # This will be saved
@@ -143,6 +144,7 @@ async def example_async_tracing():
 # Example 3: Performance monitoring
 def example_performance_monitoring():
     """Demonstrate using traces for performance monitoring."""
+    # Use in-memory for performance example to avoid file IO
     tracer = ss.Tracer(backend=ss.InMemoryBackend())
 
     @ss.trace_function(tracer=tracer)
@@ -389,20 +391,25 @@ def example_multimodal_tracing():
 
 if __name__ == "__main__":
     print("=== Example 1: Custom Backend ===")
-    example_custom_backend()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "custom_backend")):
+        example_custom_backend()
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 2: Async Tracing ===")
-    asyncio.run(example_async_tracing())
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "async")):
+        asyncio.run(example_async_tracing())
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 3: Performance Monitoring ===")
-    example_performance_monitoring()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "monitor")):
+        example_performance_monitoring()
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 4: Error Tracking ===")
-    example_error_tracking()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "error_tracking")):
+        example_error_tracking()
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 5: Multi-modal Tracing ===")
-    example_multimodal_tracing()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "multimodal")):
+        example_multimodal_tracing()

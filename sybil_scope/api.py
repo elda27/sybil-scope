@@ -5,7 +5,9 @@ Public API for the Sibyl Scope tracing library.
 from contextlib import contextmanager
 from datetime import datetime
 
-from .backend import Backend, FileBackend
+from sybil_scope.config import configure_backend
+
+from .backend import Backend
 from .core import ActionType, TraceContext, TraceEvent, TraceType
 
 
@@ -18,7 +20,7 @@ class Tracer:
         Args:
             backend: Backend instance for storing traces. Defaults to FileBackend.
         """
-        self.backend = backend or FileBackend()
+        self.backend = backend or configure_backend()
         self._context_stack: list[TraceContext] = []
         self._current_context: TraceContext | None = None
 

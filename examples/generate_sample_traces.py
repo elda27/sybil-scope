@@ -9,8 +9,9 @@ import sybil_scope as ss
 
 def generate_complex_agent_traces():
     """Generate complex agent traces with multiple levels of nesting."""
-    backend = ss.FileBackend(filepath="sample_traces.jsonl")
-    tracer = ss.Tracer(backend=backend)
+    # Deterministic filename for tests
+    tracer = ss.Tracer()
+    backend = tracer.backend
 
     print("🎯 Generating complex agent traces...")
 
@@ -222,8 +223,8 @@ def generate_complex_agent_traces():
 
 def generate_error_scenario_traces():
     """Generate traces with various error scenarios."""
-    backend = ss.FileBackend(filepath="error_scenario_traces.jsonl")
-    tracer = ss.Tracer(backend=backend)
+    tracer = ss.Tracer()
+    backend = tracer.backend
 
     print("⚠️ Generating error scenario traces...")
 
@@ -340,9 +341,8 @@ def generate_error_scenario_traces():
 
 def generate_performance_test_traces():
     """Generate traces for performance testing visualization."""
-    backend = ss.FileBackend(filepath="performance_test_traces.jsonl")
-    tracer = ss.Tracer(backend=backend)
-
+    tracer = ss.Tracer()
+    backend = tracer.backend
     print("🚀 Generating performance test traces...")
 
     # Simulate a performance-intensive workflow
@@ -448,13 +448,21 @@ if __name__ == "__main__":
     print("🎭 Generating sample trace data for visualization testing...\n")
 
     # Generate different types of sample data
-    complex_file = generate_complex_agent_traces()
+    with ss.option_context(
+        (ss.ConfigKey.TRACING_FILE_PREFIX, "complex_trace"),
+    ):
+        complex_file = generate_complex_agent_traces()
     print()
 
-    error_file = generate_error_scenario_traces()
+    with ss.option_context(
+        (ss.ConfigKey.TRACING_FILE_PREFIX, "error"),
+    ):
+        error_file = generate_error_scenario_traces()
     print()
-
-    perf_file = generate_performance_test_traces()
+    with ss.option_context(
+        (ss.ConfigKey.TRACING_FILE_PREFIX, "monitor"),
+    ):
+        perf_file = generate_performance_test_traces()
     print()
 
     print("🎉 All sample trace files generated!")

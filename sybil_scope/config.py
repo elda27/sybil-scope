@@ -33,6 +33,7 @@ class ConfigKey(str, Enum):
     TRACING_FILE_PATH = "tracing.file.path"
     TRACING_FILE_NAME_FORMAT = "tracing.file.name_format"
     TRACING_FILE_BUFFER_SIZE = "tracing.file.buffer_size"
+    TRACING_FILE_PREFIX = "tracing.file.prefix"
 
 
 _DEFAULTS: dict[str, Any] = {
@@ -40,6 +41,7 @@ _DEFAULTS: dict[str, Any] = {
     ConfigKey.TRACING_FILE_PATH.value: None,  # default auto-named in traces/
     ConfigKey.TRACING_FILE_NAME_FORMAT.value: None,  # default traces_{timestamp}.{extension}
     ConfigKey.TRACING_FILE_BUFFER_SIZE.value: 10,
+    ConfigKey.TRACING_FILE_PREFIX.value: None,
 }
 
 _options: dict[str, Any] = dict(_DEFAULTS)
@@ -75,6 +77,9 @@ def set_option(key: str | Enum, value: Any) -> None:
     elif k == ConfigKey.TRACING_FILE_PATH.value:
         if value is not None and not isinstance(value, (str, Path)):
             raise ValueError("tracing.file.path must be a str, Path, or None")
+    elif k == ConfigKey.TRACING_FILE_PREFIX.value:
+        if value is not None and not isinstance(value, (str, Path)):
+            raise ValueError("tracing.file.prefix must be a str, Path, or None")
 
     _options[k] = value
 
@@ -123,7 +128,7 @@ def option_context(*pairs: tuple[str | Enum, Any]) -> Iterator[None]:
             _options[k] = v
 
 
-def configure_tracer() -> Tracer:
+def configure_backend() -> Backend:
     """Create a Tracer from current options (no global state)."""
     backend_kind: str = get_option(ConfigKey.TRACING_BACKEND)
     backend: Backend
@@ -133,11 +138,11 @@ def configure_tracer() -> Tracer:
         filepath = get_option(ConfigKey.TRACING_FILE_PATH)
         name_format = get_option(ConfigKey.TRACING_FILE_NAME_FORMAT)
         buffer_size = get_option(ConfigKey.TRACING_FILE_BUFFER_SIZE)
+        prefix = get_option(ConfigKey.TRACING_FILE_PREFIX)
         backend = FileBackend(
             filepath=Path(filepath) if isinstance(filepath, str) else filepath,
             name_format=name_format,
             buffer_size=buffer_size,
+            prefix=str(prefix) if prefix is not None else None,
         )
-
-    tracer = Tracer(backend=backend)
-    return tracer
+    return backend

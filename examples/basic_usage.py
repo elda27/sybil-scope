@@ -268,12 +268,15 @@ def example_nested_agents():
 
 if __name__ == "__main__":
     print("=== Example 1: Basic Tracing ===")
-    example_basic_tracing()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "basic")):
+        example_basic_tracing()
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 2: Decorator Usage ===")
-    example_decorator_usage()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "decorator")):
+        example_decorator_usage()
     print("\n" + "=" * 50 + "\n")
 
     print("=== Example 3: Nested Agents ===")
-    example_nested_agents()
+    with ss.option_context((ss.ConfigKey.TRACING_FILE_PREFIX, "nested_agent")):
+        example_nested_agents()
