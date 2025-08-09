@@ -56,6 +56,14 @@ with tracer.trace(TraceType.AGENT, ActionType.START, name="MyAgent") as ctx:
 tracer.flush()
 ```
 
+### Show Viewer (Quick Link)
+
+- See the full guide: [docs/viewer.md](docs/viewer.md)
+- Quick start (from repo root):
+  - Generate sample data: `python examples/generate_sample_traces.py`
+  - Launch: `python -m sybil_scope.viewer` or `python run_viewer.py`
+  - Open http://localhost:8501
+
 ### Using Decorators
 
 ```python
@@ -191,10 +199,6 @@ for event in events:
             duration = (end_event.timestamp - event.timestamp).total_seconds()
             print(f"Operation took {duration:.3f}s")
 ```
-
-## Visualization
-
-Sibyl Scope includes a comprehensive Streamlit-based visualization interface for exploring trace data.
 
 ### Running the Viewer
 
