@@ -2696,6 +2696,18 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+all = [
+    { name = "graphviz" },
+    { name = "langchain" },
+    { name = "langchain-community" },
+    { name = "langchain-google-genai" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
+    { name = "pandas" },
+    { name = "plotly" },
+    { name = "pyvis" },
+    { name = "streamlit" },
+]
 dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -2704,6 +2716,18 @@ dev = [
     { name = "ruff" },
 ]
 langchain = [
+    { name = "graphviz" },
+    { name = "langchain" },
+    { name = "langchain-community" },
+    { name = "langchain-google-genai" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
+    { name = "pandas" },
+    { name = "plotly" },
+    { name = "pyvis" },
+    { name = "streamlit" },
+]
+langchain-core = [
     { name = "langchain" },
     { name = "langchain-community" },
     { name = "langchain-google-genai" },
@@ -2722,6 +2746,19 @@ viewer = [
 requires-dist = [{ name = "pydantic", specifier = ">=2.11.5" }]
 
 [package.metadata.requires-dev]
+all = [
+    { name = "graphviz", specifier = ">=0.20.0" },
+    { name = "langchain", specifier = ">=0.3.25" },
+    { name = "langchain-community", specifier = ">=0.3.25" },
+    { name = "langchain-google-genai", specifier = ">=2.1.5" },
+    { name = "langchain-openai", specifier = ">=0.3.24" },
+    { name = "langgraph", specifier = ">=0.4.8" },
+    { name = "pandas", specifier = ">=2.3.1" },
+    { name = "plotly", specifier = ">=5.0.0" },
+    { name = "plotly", specifier = ">=6.2.0" },
+    { name = "pyvis", specifier = ">=0.3.0" },
+    { name = "streamlit", specifier = ">=1.46.1" },
+]
 dev = [
     { name = "pytest", specifier = ">=8.4.0" },
     { name = "pytest-cov", specifier = ">=6.2.0" },
@@ -2730,6 +2767,19 @@ dev = [
     { name = "ruff", specifier = ">=0.12.8" },
 ]
 langchain = [
+    { name = "graphviz", specifier = ">=0.20.0" },
+    { name = "langchain", specifier = ">=0.3.25" },
+    { name = "langchain-community", specifier = ">=0.3.25" },
+    { name = "langchain-google-genai", specifier = ">=2.1.5" },
+    { name = "langchain-openai", specifier = ">=0.3.24" },
+    { name = "langgraph", specifier = ">=0.4.8" },
+    { name = "pandas", specifier = ">=2.3.1" },
+    { name = "plotly", specifier = ">=5.0.0" },
+    { name = "plotly", specifier = ">=6.2.0" },
+    { name = "pyvis", specifier = ">=0.3.0" },
+    { name = "streamlit", specifier = ">=1.46.1" },
+]
+langchain-core = [
     { name = "langchain", specifier = ">=0.3.25" },
     { name = "langchain-community", specifier = ">=0.3.25" },
     { name = "langchain-google-genai", specifier = ">=2.1.5" },

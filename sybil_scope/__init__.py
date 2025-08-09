@@ -2,6 +2,8 @@
 Sibyl Scope - Comprehensive tracing and observability toolkit for Python AI/LLM applications.
 """
 
+from sybil_scope._version import __version__  # noqa
+
 from .api import Tracer
 from .backend import Backend, FileBackend, InMemoryBackend
 from .config import (
@@ -19,7 +21,6 @@ from .decorators import (
     trace_tool,
 )
 
-__version__ = "0.1.0"
 __all__ = [
     "Tracer",
     "TraceType",
